@@ -1,4 +1,9 @@
-import type { Incident, IncidentCreatePayload } from "@/types/incident";
+import type {
+  ActionPlan,
+  Incident,
+  IncidentCreatePayload,
+  TriagePayload,
+} from "@/types/incident";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
@@ -54,4 +59,15 @@ export function createIncident(payload: IncidentCreatePayload) {
 
 export function getIncident(id: string) {
   return request<Incident>(`/api/v1/incidents/${id}`);
+}
+
+export function triageIncident(id: string, payload: TriagePayload) {
+  return request<Incident>(`/api/v1/incidents/${id}/triage`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function getActionPlan(id: string) {
+  return request<ActionPlan>(`/api/v1/incidents/${id}/action-plan`);
 }

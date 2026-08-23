@@ -21,6 +21,11 @@ const config: Config = {
           hover: "#8F1E17",
           soft: "#F6E4E2",
         },
+        warn: {
+          DEFAULT: "#C2410C",
+          hover: "#9A3412",
+          soft: "#FFEDD5",
+        },
         calm: {
           DEFAULT: "#2E6E62",
           hover: "#255A50",

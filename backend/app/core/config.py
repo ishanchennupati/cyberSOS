@@ -17,7 +17,7 @@ class Settings(BaseSettings):
     DATABASE_URL: str
 
     # Comma-separated origins the frontend is served from.
-    CORS_ORIGINS: str = "http://localhost:3000"
+    CORS_ORIGINS: str = "http://localhost:3000,http://127.0.0.1:3000"
 
     SERVICE_NAME: str = "cybersos-api"
     API_V1_PREFIX: str = "/api/v1"

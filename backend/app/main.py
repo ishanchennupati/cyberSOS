@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.v1 import api_router
 from app.core.config import get_settings
-from app.db.base import Base
+from app.db.schema import ensure_schema
 from app.db.session import engine
 
 # Import models so they're registered on Base.metadata before create_all runs.
@@ -28,10 +28,8 @@ app.add_middleware(
 
 @app.on_event("startup")
 def on_startup() -> None:
-    # Phase 0: create tables directly. Once the schema stabilizes, replace
-    # this with Alembic migrations (scaffolding for that is already in
-    # requirements.txt).
-    Base.metadata.create_all(bind=engine)
+    # create_all for a fresh database, plus additive alters for Phase 0 DBs.
+    ensure_schema(engine)
 
 
 @app.get("/health", tags=["health"])

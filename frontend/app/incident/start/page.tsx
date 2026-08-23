@@ -2,55 +2,181 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, ArrowRight } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { ArrowLeft } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
-import { ProgressSteps } from "@/components/progress-steps";
 import { ErrorState } from "@/components/error-state";
+import { FlowNav } from "@/components/flow-nav";
 import { LoadingState } from "@/components/loading-state";
-import { createIncident, ApiError } from "@/lib/api";
-import { cn } from "@/lib/utils";
+import { ProgressSteps } from "@/components/progress-steps";
+import { StepAmount } from "@/components/steps/step-amount";
+import { StepIncidentType } from "@/components/steps/step-incident-type";
+import { StepSituation, type SituationId } from "@/components/steps/step-situation";
+import { StepTransactionId } from "@/components/steps/step-transaction-id";
+import { StepWhen } from "@/components/steps/step-when";
+import { createIncident, triageIncident, ApiError } from "@/lib/api";
+import { parseAmountInput } from "@/lib/format";
+import {
+  fromDateTimeLocalValue,
+  occurredAtFromPreset,
+  toDateTimeLocalValue,
+  type TimePreset,
+} from "@/lib/time-presets";
+import type { IncidentType, PaymentMethod } from "@/types/incident";
 
 const STEPS = [
   { label: "What happened" },
-  { label: "Your incident" },
-  { label: "Take action" },
-  { label: "Evidence" },
-  { label: "Report" },
+  { label: "Type" },
+  { label: "When" },
+  { label: "Amount" },
+  { label: "UTR" },
 ];
 
-const OPTIONS = [
-  { id: "money_taken", label: "Money was taken from my account" },
-  { id: "tricked_into_sending", label: "I was tricked into sending money" },
-  { id: "account_accessed", label: "Someone accessed my bank/payment account" },
-  { id: "not_sure", label: "I'm not sure what happened" },
-] as const;
+type FlowState = {
+  situation: SituationId | null;
+  incidentId: string | null;
+  incidentType: IncidentType | null;
+  timePreset: TimePreset | null;
+  exactValue: string;
+  amount: string;
+  paymentMethod: PaymentMethod | null;
+  transactionId: string;
+};
 
-type Status = "idle" | "loading" | "error" | "success";
+const INITIAL_STATE: FlowState = {
+  situation: null,
+  incidentId: null,
+  incidentType: null,
+  timePreset: null,
+  exactValue: "",
+  amount: "",
+  paymentMethod: null,
+  transactionId: "",
+};
 
 export default function IncidentStartPage() {
-  const [selected, setSelected] = useState<(typeof OPTIONS)[number]["id"] | null>(null);
-  const [status, setStatus] = useState<Status>("idle");
+  const router = useRouter();
+  const [step, setStep] = useState(1);
+  const [flow, setFlow] = useState<FlowState>(INITIAL_STATE);
   const [errorMessage, setErrorMessage] = useState("");
+  const [busy, setBusy] = useState(false);
 
-  async function handleContinue() {
-    if (!selected) return;
-    setStatus("loading");
+  function update<K extends keyof FlowState>(key: K, value: FlowState[K]) {
+    setFlow((prev) => ({ ...prev, [key]: value }));
+    setErrorMessage("");
+  }
+
+  function resolvedOccurredAt(): Date | null {
+    if (flow.timePreset === "exact") {
+      return fromDateTimeLocalValue(flow.exactValue);
+    }
+    if (flow.timePreset) {
+      return occurredAtFromPreset(flow.timePreset);
+    }
+    return null;
+  }
+
+  function validateStep(current: number): string | null {
+    if (current === 1 && !flow.situation) {
+      return "Please choose the option that best matches what happened.";
+    }
+    if (current === 2) {
+      if (!flow.incidentType) {
+        return "Please select an incident type to continue.";
+      }
+      if (flow.incidentType !== "financial_fraud") {
+        return "This type isn't available yet. Please choose UPI / financial fraud.";
+      }
+    }
+    if (current === 3) {
+      if (!flow.timePreset) {
+        return "Please tell us when this happened — it decides how urgently you need to act.";
+      }
+      const occurred = resolvedOccurredAt();
+      if (!occurred) {
+        return "Please enter the date and time of the transaction.";
+      }
+      if (occurred.getTime() > Date.now() + 60 * 1000) {
+        return "That time is in the future. Please check the date and time.";
+      }
+    }
+    if (current === 4) {
+      const amount = parseAmountInput(flow.amount);
+      if (amount === null || amount <= 0) {
+        return "Please enter the amount that left your account.";
+      }
+      if (!flow.paymentMethod || flow.paymentMethod === "unknown") {
+        return "Please select how the payment was made.";
+      }
+    }
+    return null;
+  }
+
+  async function handleNext() {
+    const validationError = validateStep(step);
+    if (validationError) {
+      setErrorMessage(validationError);
+      return;
+    }
     setErrorMessage("");
 
+    if (step === 1) {
+      if (flow.incidentId) {
+        setStep(2);
+        return;
+      }
+      setBusy(true);
+      try {
+        const incident = await createIncident({
+          incident_type: "financial_fraud",
+          payment_method: "unknown",
+        });
+        setFlow((prev) => ({ ...prev, incidentId: incident.id }));
+        setStep(2);
+      } catch (err) {
+        setErrorMessage(
+          err instanceof ApiError ? err.message : "Something went wrong. Please try again."
+        );
+      } finally {
+        setBusy(false);
+      }
+      return;
+    }
+
+    if (step < 5) {
+      setStep(step + 1);
+      return;
+    }
+
+    const occurred = resolvedOccurredAt();
+    const amount = parseAmountInput(flow.amount);
+    if (!flow.incidentId || !flow.incidentType || !occurred || amount === null || !flow.paymentMethod) {
+      setErrorMessage("Some details are missing. Please go back and check each step.");
+      return;
+    }
+
+    setBusy(true);
     try {
-      // All financial-related options lead to the financial-fraud flow for now.
-      await createIncident({
-        incident_type: "financial_fraud",
-        payment_method: "unknown",
+      await triageIncident(flow.incidentId, {
+        incident_type: flow.incidentType,
+        occurred_at: occurred.toISOString(),
+        amount,
+        payment_method: flow.paymentMethod,
+        transaction_id: flow.transactionId.trim() ? flow.transactionId.trim() : null,
       });
-      setStatus("success");
+      router.push(`/incident/${flow.incidentId}/result`);
     } catch (err) {
-      setStatus("error");
       setErrorMessage(
         err instanceof ApiError ? err.message : "Something went wrong. Please try again."
       );
+      setBusy(false);
     }
+  }
+
+  function handleBack() {
+    setErrorMessage("");
+    if (step === 1) return;
+    setStep(step - 1);
   }
 
   return (
@@ -66,80 +192,89 @@ export default function IncidentStartPage() {
       </header>
 
       <div className="mx-auto max-w-3xl px-6 py-10">
-        <ProgressSteps steps={STEPS} currentStep={1} />
+        <ProgressSteps steps={STEPS} currentStep={step} />
 
         <div className="mt-10">
-          <h1 className="font-display text-3xl text-ink sm:text-4xl">
-            Let&rsquo;s understand what happened.
-          </h1>
-
-          {status === "success" ? (
-            <div className="mt-8 rounded-lg border border-calm/30 bg-calm-soft px-6 py-8">
-              <p className="font-medium text-ink">Your incident has been started.</p>
-              <p className="mt-2 text-sm leading-relaxed text-ink-muted">
-                This confirms CyberSOS and the backend are talking to each other. The next
-                steps — your incident details, immediate actions, and evidence collection —
-                are built in the following phase.
-              </p>
-            </div>
-          ) : (
-            <>
-              <h2 className="mt-8 text-lg font-medium text-ink">What happened?</h2>
-
-              <div role="radiogroup" aria-label="What happened" className="mt-4 flex flex-col gap-3">
-                {OPTIONS.map((option) => {
-                  const isSelected = selected === option.id;
-                  return (
-                    <button
-                      key={option.id}
-                      type="button"
-                      role="radio"
-                      aria-checked={isSelected}
-                      onClick={() => setSelected(option.id)}
-                      className={cn(
-                        "flex items-center gap-3 rounded-md border px-5 py-4 text-left text-[15px] transition-colors",
-                        isSelected
-                          ? "border-ink bg-white shadow-card"
-                          : "border-line bg-surface hover:border-line2"
-                      )}
-                    >
-                      <span
-                        aria-hidden="true"
-                        className={cn(
-                          "flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2",
-                          isSelected ? "border-ink" : "border-line2"
-                        )}
-                      >
-                        {isSelected && <span className="h-2.5 w-2.5 rounded-full bg-ink" />}
-                      </span>
-                      <span className="text-ink">{option.label}</span>
-                    </button>
-                  );
-                })}
-              </div>
-
-              {status === "loading" && <div className="mt-6"><LoadingState /></div>}
-
-              {status === "error" && (
-                <div className="mt-6">
-                  <ErrorState message={errorMessage} onRetry={handleContinue} />
-                </div>
-              )}
-
-              <div className="mt-8">
-                <Button
-                  variant="urgent"
-                  size="lg"
-                  disabled={!selected || status === "loading"}
-                  onClick={handleContinue}
-                  className="w-full sm:w-auto"
-                >
-                  Continue
-                  <ArrowRight size={18} aria-hidden="true" />
-                </Button>
-              </div>
-            </>
+          {step === 1 && (
+            <StepSituation
+              value={flow.situation}
+              onChange={(value) => update("situation", value)}
+            />
           )}
+          {step === 2 && (
+            <StepIncidentType
+              value={flow.incidentType}
+              onChange={(value) => update("incidentType", value)}
+            />
+          )}
+          {step === 3 && (
+            <StepWhen
+              preset={flow.timePreset}
+              exactValue={flow.exactValue}
+              onPreset={(preset) => {
+                const nextExact =
+                  preset === "exact"
+                    ? flow.exactValue || toDateTimeLocalValue(new Date())
+                    : toDateTimeLocalValue(occurredAtFromPreset(preset));
+                setFlow((prev) => ({
+                  ...prev,
+                  timePreset: preset,
+                  exactValue: nextExact,
+                }));
+                setErrorMessage("");
+              }}
+              onExactChange={(value) => {
+                setFlow((prev) => ({
+                  ...prev,
+                  timePreset: "exact",
+                  exactValue: value,
+                }));
+                setErrorMessage("");
+              }}
+            />
+          )}
+          {step === 4 && (
+            <StepAmount
+              amount={flow.amount}
+              paymentMethod={flow.paymentMethod}
+              onAmountChange={(value) => update("amount", value)}
+              onPaymentMethodChange={(value) => update("paymentMethod", value)}
+            />
+          )}
+          {step === 5 && (
+            <StepTransactionId
+              value={flow.transactionId}
+              onChange={(value) => update("transactionId", value)}
+            />
+          )}
+
+          {busy && (
+            <div className="mt-6">
+              <LoadingState
+                message={
+                  step === 5
+                    ? "Working out what you should do first…"
+                    : "Starting your incident…"
+                }
+              />
+            </div>
+          )}
+
+          {errorMessage && !busy && (
+            <div className="mt-6">
+              <ErrorState
+                message={errorMessage}
+                onRetry={handleNext}
+              />
+            </div>
+          )}
+
+          <FlowNav
+            onBack={step > 1 ? handleBack : undefined}
+            onNext={handleNext}
+            nextLabel={step === 5 ? "See what to do now" : "Continue"}
+            busy={busy}
+          />
         </div>
       </div>
     </main>
