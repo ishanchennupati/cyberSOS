@@ -52,6 +52,8 @@ type FlowState = {
   amount: string;
   paymentMethod: PaymentMethod | null;
   transactionId: string;
+  transactionStatus: "unknown" | "pending" | "completed";
+  ongoingRisk: boolean;
   evidenceFiles: File[];
 };
 
@@ -67,6 +69,8 @@ const INITIAL_STATE: FlowState = {
   amount: "",
   paymentMethod: null,
   transactionId: "",
+  transactionStatus: "unknown",
+  ongoingRisk: false,
   evidenceFiles: [],
 };
 
@@ -249,6 +253,9 @@ export default function IncidentStartPage() {
         amount,
         payment_method: flow.paymentMethod,
         transaction_id: flow.transactionId.trim() ? flow.transactionId.trim() : null,
+        transaction_status: flow.transactionStatus,
+        unauthorized_activity_continuing: flow.ongoingRisk,
+        potential_additional_loss: flow.ongoingRisk,
       });
       router.push(`/incident/${flow.incidentId}/result`);
     } catch (err) {
@@ -337,7 +344,7 @@ export default function IncidentStartPage() {
             />
           )}
           {isFinancial && step === 5 && (
-            <StepTransactionId value={flow.transactionId} onChange={(value) => update("transactionId", value)} />
+            <StepTransactionId value={flow.transactionId} onChange={(value) => update("transactionId", value)} status={flow.transactionStatus} onStatusChange={(value) => update("transactionStatus", value)} ongoing={flow.ongoingRisk} onOngoingChange={(value) => update("ongoingRisk", value)} />
           )}
 
           {busy && (

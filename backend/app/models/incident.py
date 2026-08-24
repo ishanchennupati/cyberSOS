@@ -96,6 +96,18 @@ class Incident(Base):
     )
 
     transaction_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    transaction_status: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    is_fraud_ongoing: Mapped[bool | None] = mapped_column(nullable=True)
+    is_account_compromised: Mapped[bool | None] = mapped_column(nullable=True)
+    is_credentials_exposed: Mapped[bool | None] = mapped_column(nullable=True)
+    is_otp_shared: Mapped[bool | None] = mapped_column(nullable=True)
+    is_pin_shared: Mapped[bool | None] = mapped_column(nullable=True)
+    is_password_shared: Mapped[bool | None] = mapped_column(nullable=True)
+    is_remote_access_granted: Mapped[bool | None] = mapped_column(nullable=True)
+    unauthorized_activity_continuing: Mapped[bool | None] = mapped_column(nullable=True)
+    potential_additional_loss: Mapped[bool | None] = mapped_column(nullable=True)
+    account_secured: Mapped[bool | None] = mapped_column(nullable=True)
+    evidence_available: Mapped[bool | None] = mapped_column(nullable=True)
 
     incident_subtype: Mapped[str | None] = mapped_column(String(128), nullable=True)
     affected_person_type: Mapped[str | None] = mapped_column(String(64), nullable=True)
@@ -129,6 +141,10 @@ class Incident(Base):
     urgency_computed_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    severity: Mapped[Urgency | None] = mapped_column(nullable=True)
+    ongoing_risk: Mapped[Urgency | None] = mapped_column(nullable=True)
+    recovery_window: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    urgency_reasons: Mapped[list | None] = mapped_column(JSON().with_variant(JSONB, "postgresql"), nullable=True)
 
     status: Mapped[IncidentStatus] = mapped_column(
         Enum(IncidentStatus, name="incident_status_enum"),

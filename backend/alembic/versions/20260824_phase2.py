@@ -31,6 +31,26 @@ def upgrade() -> None:
         op.add_column("incidents", sa.Column("occurred_at", sa.DateTime(timezone=True), nullable=True))
     if "transaction_id" not in incident_columns:
         op.add_column("incidents", sa.Column("transaction_id", sa.String(length=128), nullable=True))
+    for name, column in (
+        ("transaction_status", sa.String(length=32)),
+        ("is_fraud_ongoing", sa.Boolean()),
+        ("is_account_compromised", sa.Boolean()),
+        ("is_credentials_exposed", sa.Boolean()),
+        ("is_otp_shared", sa.Boolean()),
+        ("is_pin_shared", sa.Boolean()),
+        ("is_password_shared", sa.Boolean()),
+        ("is_remote_access_granted", sa.Boolean()),
+        ("unauthorized_activity_continuing", sa.Boolean()),
+        ("potential_additional_loss", sa.Boolean()),
+        ("account_secured", sa.Boolean()),
+        ("evidence_available", sa.Boolean()),
+        ("severity", sa.String(length=32)),
+        ("ongoing_risk", sa.String(length=32)),
+        ("recovery_window", sa.String(length=32)),
+        ("urgency_reasons", sa.JSON()),
+    ):
+        if name not in incident_columns:
+            op.add_column("incidents", sa.Column(name, column, nullable=True))
     if "other_crime_sub_category" not in incident_columns:
         column_type = sa.Enum("online_social_media", "ransomware", "hacking", "cryptocurrency", "online_trafficking", "online_gambling", "any_other", name="other_crime_sub_category_enum") if bind.dialect.name == "postgresql" else sa.String(length=64)
         op.add_column("incidents", sa.Column("other_crime_sub_category", column_type, nullable=True))
@@ -75,5 +95,5 @@ def upgrade() -> None:
 def downgrade() -> None:
     op.drop_index("ix_evidence_incident_id", table_name="evidence")
     op.drop_table("evidence")
-    for name in ("urgency_score", "evidence_types", "sensitive_information_exposed", "attacker_active", "account_access", "content_still_online", "threat_or_blackmail", "immediate_danger", "account_type", "platform", "affected_person_type", "incident_subtype", "urgency_computed_at", "details", "other_crime_sub_category", "transaction_id", "occurred_at"):
+    for name in ("urgency_reasons", "recovery_window", "ongoing_risk", "severity", "evidence_available", "account_secured", "potential_additional_loss", "unauthorized_activity_continuing", "is_remote_access_granted", "is_password_shared", "is_pin_shared", "is_otp_shared", "is_credentials_exposed", "is_account_compromised", "is_fraud_ongoing", "transaction_status", "urgency_score", "evidence_types", "sensitive_information_exposed", "attacker_active", "account_access", "content_still_online", "threat_or_blackmail", "immediate_danger", "account_type", "platform", "affected_person_type", "incident_subtype", "urgency_computed_at", "details", "other_crime_sub_category", "transaction_id", "occurred_at"):
         op.drop_column("incidents", name)
