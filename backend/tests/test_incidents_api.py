@@ -1,8 +1,10 @@
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 from fastapi.testclient import TestClient
 
 from app.services.incident_service import LARGE_AMOUNT_THRESHOLD, MISSING_UTR_TEXT
+from app.core.config import get_settings
 
 NOW = datetime(2026, 8, 24, 12, 0, 0, tzinfo=timezone.utc)
 
@@ -96,6 +98,50 @@ def test_action_plan_includes_draft_and_actions(client: TestClient) -> None:
     assert "cybercrime.gov.in" in draft
 
 
+def test_other_cyber_crime_triage_keeps_sub_category_and_details(client: TestClient) -> None:
+    response = client.post(
+        "/api/v1/incidents",
+        json={
+            "incident_type": "other_cyber_crime",
+            "other_crime_sub_category": "ransomware",
+            "payment_method": "unknown",
+            "details": {
+                "incident_date_time": "24 Aug 2026, 10:30 AM",
+                "occurred_on": "Website",
+                "bitcoin_details": "bc1-test-wallet",
+            },
+        },
+    )
+    assert response.status_code == 201, response.text
+    incident_id = response.json()["id"]
+
+    response = client.post(
+        f"/api/v1/incidents/{incident_id}/triage",
+        json={
+            "incident_type": "other_cyber_crime",
+            "other_crime_sub_category": "ransomware",
+            "occurred_at": (NOW - timedelta(hours=2)).isoformat(),
+            "payment_method": "unknown",
+            "details": {
+                "incident_date_time": "24 Aug 2026, 10:30 AM",
+                "occurred_on": "Website",
+                "bitcoin_details": "bc1-test-wallet",
+            },
+        },
+    )
+    assert response.status_code == 200, response.text
+    data = response.json()
+    assert data["incident_type"] == "other_cyber_crime"
+    assert data["other_crime_sub_category"] == "ransomware"
+    assert data["details"]["bitcoin_details"] == "bc1-test-wallet"
+
+    response = client.get(f"/api/v1/incidents/{incident_id}/action-plan")
+    assert response.status_code == 200, response.text
+    draft = response.json()["complaint_draft"]["body"]
+    assert "Other cyber crime category: Ransomware" in draft
+    assert "Bitcoin Details: bc1-test-wallet" in draft
+
+
 def test_triage_rejects_zero_amount(client: TestClient) -> None:
     incident_id = _create(client)
     response = client.post(
@@ -111,3 +157,110 @@ def test_triage_missing_incident(client: TestClient) -> None:
         json=_triage_body(),
     )
     assert response.status_code == 404
+
+
+def test_other_crime_details_update_validates_and_persists(client: TestClient) -> None:
+    incident_id = client.post(
+        "/api/v1/incidents",
+        json={
+            "incident_type": "other_cyber_crime",
+            "other_crime_sub_category": "any_other",
+            "payment_method": "unknown",
+            "details": {
+                "incident_date_time": "24 Aug 2026, 10:30 AM",
+                "occurred_on": "Website",
+                "other_crime_details": "Initial details",
+            },
+        },
+    ).json()["id"]
+    response = client.patch(
+        f"/api/v1/incidents/{incident_id}/details",
+        json={
+            "other_crime_sub_category": "any_other",
+            "details": {
+                "incident_date_time": "24 Aug 2026, 10:30 AM",
+                "occurred_on": "Website",
+                "other_crime_details": "Credential theft",
+            },
+        },
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["details"]["other_crime_details"] == "Credential theft"
+
+    response = client.patch(
+        f"/api/v1/incidents/{incident_id}/details",
+        json={"other_crime_sub_category": "any_other", "details": {}},
+    )
+    assert response.status_code == 422
+
+
+def test_evidence_upload_persists_metadata_and_file(
+    client: TestClient, tmp_path: Path, monkeypatch
+) -> None:
+    monkeypatch.setattr(get_settings(), "EVIDENCE_STORAGE_DIR", str(tmp_path))
+    incident_id = _create(client)
+    response = client.post(
+        f"/api/v1/incidents/{incident_id}/evidence",
+        files={"file": ("proof.txt", b"evidence contents", "text/plain")},
+    )
+    assert response.status_code == 201, response.text
+    data = response.json()
+    assert data["original_filename"] == "proof.txt"
+    assert data["content_type"] == "text/plain"
+    assert data["size_bytes"] == len(b"evidence contents")
+    assert list(tmp_path.iterdir())[0].read_bytes() == b"evidence contents"
+
+
+def test_women_children_immediate_danger_is_critical_and_safety_first(client: TestClient) -> None:
+    response = client.post("/api/v1/incidents", json={"incident_type": "women_children", "payment_method": "unknown", "incident_subtype": "Threats or blackmail"})
+    assert response.status_code == 201, response.text
+    incident_id = response.json()["id"]
+    response = client.post(f"/api/v1/incidents/{incident_id}/triage", json={
+        "incident_type": "women_children", "incident_subtype": "Threats or blackmail", "occurred_at": NOW.isoformat(),
+        "payment_method": "unknown", "immediate_danger": True, "threat_or_blackmail": True,
+        "affected_person_type": "Me", "platform": "WhatsApp", "evidence_types": [],
+    })
+    assert response.status_code == 200, response.text
+    assert response.json()["urgency"] == "critical"
+    plan = client.get(f"/api/v1/incidents/{incident_id}/action-plan").json()
+    assert plan["core_message"] == "Your immediate safety comes first."
+    assert plan["actions"][0]["id"] == "safety_first"
+
+
+def test_women_children_child_blackmail_and_online_content_raise_urgency(client: TestClient) -> None:
+    response = client.post("/api/v1/incidents", json={"incident_type": "women_children", "payment_method": "unknown", "incident_subtype": "Intimate/private content shared or threatened"})
+    incident_id = response.json()["id"]
+    response = client.post(f"/api/v1/incidents/{incident_id}/triage", json={
+        "incident_type": "women_children", "incident_subtype": "Intimate/private content shared or threatened", "occurred_at": NOW.isoformat(),
+        "payment_method": "unknown", "affected_person_type": "A child", "threat_or_blackmail": True,
+        "content_still_online": True, "evidence_types": ["Screenshots"],
+    })
+    assert response.status_code == 200
+    assert response.json()["urgency"] == "critical"
+    assert response.json()["urgency_score"] >= 4
+
+
+def test_other_cyber_phishing_credentials_and_active_attacker_is_high(client: TestClient) -> None:
+    response = client.post("/api/v1/incidents", json={"incident_type": "other_cyber_crime", "payment_method": "unknown", "incident_subtype": "Phishing / suspicious link"})
+    incident_id = response.json()["id"]
+    response = client.post(f"/api/v1/incidents/{incident_id}/triage", json={
+        "incident_type": "other_cyber_crime", "incident_subtype": "Phishing / suspicious link", "occurred_at": NOW.isoformat(),
+        "payment_method": "unknown", "attacker_active": True, "sensitive_information_exposed": True,
+        "details": {"credentials_entered": "Yes"}, "evidence_types": ["URLs"],
+    })
+    assert response.status_code == 200, response.text
+    assert response.json()["urgency"] == "critical"
+    plan = client.get(f"/api/v1/incidents/{incident_id}/action-plan").json()
+    assert plan["actions"][0]["id"] == "secure_account"
+
+
+def test_other_cyber_malware_uses_device_safety_actions(client: TestClient) -> None:
+    response = client.post("/api/v1/incidents", json={"incident_type": "other_cyber_crime", "payment_method": "unknown", "incident_subtype": "Malware / suspicious software"})
+    incident_id = response.json()["id"]
+    response = client.post(f"/api/v1/incidents/{incident_id}/triage", json={
+        "incident_type": "other_cyber_crime", "incident_subtype": "Malware / suspicious software", "occurred_at": NOW.isoformat(),
+        "payment_method": "unknown", "account_type": "Device", "sensitive_information_exposed": True,
+    })
+    assert response.status_code == 200
+    plan = client.get(f"/api/v1/incidents/{incident_id}/action-plan").json()
+    assert any(item["id"] == "disconnect_device" for item in plan["actions"])

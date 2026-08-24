@@ -18,12 +18,13 @@ export class ApiError extends Error {
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   let response: Response;
+  const isMultipart = typeof FormData !== "undefined" && init?.body instanceof FormData;
 
   try {
     response = await fetch(`${API_URL}${path}`, {
       ...init,
       headers: {
-        "Content-Type": "application/json",
+        ...(isMultipart ? {} : { "Content-Type": "application/json" }),
         ...init?.headers,
       },
     });
@@ -65,6 +66,23 @@ export function triageIncident(id: string, payload: TriagePayload) {
   return request<Incident>(`/api/v1/incidents/${id}/triage`, {
     method: "POST",
     body: JSON.stringify(payload),
+  });
+}
+
+export async function uploadEvidence(id: string, file: File) {
+  const form = new FormData();
+  form.append("file", file);
+  return request<{
+    id: string;
+    incident_id: string;
+    original_filename: string;
+    content_type: string | null;
+    size_bytes: number;
+    created_at: string;
+  }>(`/api/v1/incidents/${id}/evidence`, {
+    method: "POST",
+    body: form,
+    headers: {},
   });
 }
 

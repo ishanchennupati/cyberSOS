@@ -174,8 +174,8 @@ export function ResultScreen({ plan }: ResultScreenProps) {
         </p>
         <h2 className="mt-2 font-display text-2xl text-ink">Prepare your complaint</h2>
         <p className="mt-2 max-w-xl text-[15px] leading-relaxed text-ink-muted">
-          A summary from the details you just gave us, ready to paste into cybercrime.gov.in or
-          read out on 1930. Nothing has been submitted on your behalf.
+          Your answers are now a complaint draft. Review it, then open the official portal to file
+          it yourself. CyberSOS does not submit complaints without a government integration and your confirmation.
         </p>
         {!showDraft ? (
           <Button
@@ -205,7 +205,7 @@ export function ResultScreen({ plan }: ResultScreenProps) {
               rel="noopener noreferrer"
               className="mt-4 inline-flex items-center gap-2 text-sm font-medium text-calm hover:underline"
             >
-              Open cybercrime.gov.in
+              Open official filing portal
               <ExternalLink size={14} aria-hidden="true" />
             </a>
           </div>

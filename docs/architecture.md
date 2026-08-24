@@ -53,10 +53,10 @@ live in `lib/api.ts`.
 
 - PostgreSQL, reachable via `DATABASE_URL` (works the same for a local
   Postgres instance or a hosted Supabase Postgres instance)
-- Phase 0 creates tables directly from the SQLAlchemy models on startup
-  (`Base.metadata.create_all`). `alembic` is already in
-  `requirements.txt` so real migrations can be introduced without a
-  dependency change once the schema needs to evolve.
+- Alembic migrations in `backend/alembic/` track schema changes. The Phase 2
+  revision adds the Other Cyber Crime fields and evidence metadata table;
+  `ensure_schema` remains as additive compatibility support for older local
+  databases.
 - Single table so far: `incidents` (see `docs/product.md` for the field
   list and enum values).
 
@@ -67,22 +67,21 @@ live in `lib/api.ts`.
 - `GET /health` — API liveness
 - `GET /api/v1/health/database` — confirms the API can reach Postgres,
   without ever returning connection details or credentials
-- `POST /api/v1/incidents` — create an incident (financial fraud only,
-  for now)
+- `POST /api/v1/incidents` — create an incident from any supported guided flow
 - `GET /api/v1/incidents/{incident_id}` — fetch one incident
 - CORS is restricted to the origins listed in `CORS_ORIGINS`
   (defaults to `http://localhost:3000`)
 
 ## Future layers (not built yet)
 
-- **AI layer** — real triage/urgency classification, guided Q&A, drafting
-  help for the complaint narrative. Will sit behind `app/services/`, called
-  from new route(s), so today's routes and models don't need to change
-  shape to accommodate it.
-- **Evidence-processing layer** — file upload, OCR, image/screenshot
-  parsing, structured extraction of transaction details. Will introduce a
-  new `evidence` table linked to `incidents.id`, plus storage (e.g. object
-  storage bucket referenced by URL, not stored in Postgres directly).
+- **AI layer** — the frontend currently uses a deterministic guided-question
+  provider. An LLM-backed provider can replace that question list later,
+  returning the same structured `details` payload and leaving persistence and
+  complaint drafting unchanged.
+- **Evidence-processing layer** — OCR, image/screenshot parsing, and
+  structured extraction of transaction details. Phase 2 stores uploaded files
+  locally and records metadata in `evidence`; production should move file
+  bytes to object storage.
 - **Government-service links** — deeper, still non-authoritative,
   integration such as pre-filling the citizen's own submission to
   cybercrime.gov.in, or checking 1930 callback status if such an API

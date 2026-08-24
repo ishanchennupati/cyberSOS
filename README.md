@@ -40,8 +40,15 @@ other over HTTP.
 
 1. Create a Postgres database (locally, or a new Supabase project).
 2. Copy its connection string — you'll need it for `DATABASE_URL`.
-3. No manual schema setup is required: on startup, the backend creates
-   the `incidents` table automatically from its models.
+3. Apply tracked schema migrations from `backend`:
+
+```bash
+alembic upgrade head
+```
+
+The API also keeps its additive startup compatibility check for existing
+Phase 0/1 databases. Evidence files are stored in `EVIDENCE_STORAGE_DIR`
+(default `./evidence`); use object storage instead for a production deployment.
 
 ## 2. Backend setup
 

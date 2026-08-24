@@ -10,11 +10,13 @@ import { FlowNav } from "@/components/flow-nav";
 import { LoadingState } from "@/components/loading-state";
 import { ProgressSteps } from "@/components/progress-steps";
 import { StepAmount } from "@/components/steps/step-amount";
+import { StepCrimeCategory } from "@/components/steps/step-crime-category";
 import { StepIncidentType } from "@/components/steps/step-incident-type";
+import { GuidedCrimeQuestions, guidedQuestionLabels, type GuidedCrimeDetails } from "@/components/steps/guided-crime-questions";
 import { StepSituation, type SituationId } from "@/components/steps/step-situation";
 import { StepTransactionId } from "@/components/steps/step-transaction-id";
 import { StepWhen } from "@/components/steps/step-when";
-import { createIncident, triageIncident, ApiError } from "@/lib/api";
+import { createIncident, triageIncident, uploadEvidence, ApiError } from "@/lib/api";
 import { parseAmountInput } from "@/lib/format";
 import {
   fromDateTimeLocalValue,
@@ -22,9 +24,15 @@ import {
   toDateTimeLocalValue,
   type TimePreset,
 } from "@/lib/time-presets";
-import type { IncidentType, PaymentMethod } from "@/types/incident";
+import type {
+  IncidentType,
+  OtherCrimeSubCategory,
+  PaymentMethod,
+  TopLevelCrimeCategory,
+} from "@/types/incident";
 
-const STEPS = [
+const FINANCIAL_STEPS = [
+  { label: "Category" },
   { label: "What happened" },
   { label: "Type" },
   { label: "When" },
@@ -33,33 +41,49 @@ const STEPS = [
 ];
 
 type FlowState = {
+  category: TopLevelCrimeCategory | null;
   situation: SituationId | null;
   incidentId: string | null;
   incidentType: IncidentType | null;
+  otherSubCategory: OtherCrimeSubCategory | null;
+  otherDetails: GuidedCrimeDetails;
   timePreset: TimePreset | null;
   exactValue: string;
   amount: string;
   paymentMethod: PaymentMethod | null;
   transactionId: string;
+  evidenceFiles: File[];
 };
 
 const INITIAL_STATE: FlowState = {
+  category: null,
   situation: null,
   incidentId: null,
   incidentType: null,
+  otherSubCategory: null,
+  otherDetails: {},
   timePreset: null,
   exactValue: "",
   amount: "",
   paymentMethod: null,
   transactionId: "",
+  evidenceFiles: [],
 };
 
 export default function IncidentStartPage() {
   const router = useRouter();
-  const [step, setStep] = useState(1);
+  const [step, setStep] = useState(0);
+  const [guidedIndex, setGuidedIndex] = useState(0);
   const [flow, setFlow] = useState<FlowState>(INITIAL_STATE);
   const [errorMessage, setErrorMessage] = useState("");
   const [busy, setBusy] = useState(false);
+
+  const isFinancial = flow.category === "financial_fraud";
+  const isOther = flow.category === "other_cyber_crime";
+  const guidedCategory = flow.category === "women_children" ? "women_children" : "other_cyber_crime";
+  const steps = isOther || flow.category === "women_children"
+    ? [{ label: "Category" }, ...guidedQuestionLabels(guidedCategory, flow.otherSubCategory, flow.otherDetails).map((label) => ({ label }))]
+    : FINANCIAL_STEPS;
 
   function update<K extends keyof FlowState>(key: K, value: FlowState[K]) {
     setFlow((prev) => ({ ...prev, [key]: value }));
@@ -67,49 +91,89 @@ export default function IncidentStartPage() {
   }
 
   function resolvedOccurredAt(): Date | null {
-    if (flow.timePreset === "exact") {
-      return fromDateTimeLocalValue(flow.exactValue);
-    }
-    if (flow.timePreset) {
-      return occurredAtFromPreset(flow.timePreset);
+    if (flow.timePreset === "exact") return fromDateTimeLocalValue(flow.exactValue);
+    if (flow.timePreset) return occurredAtFromPreset(flow.timePreset);
+    const guidedDate = String(flow.otherDetails.incident_date_time ?? "");
+    const preset = String(flow.otherDetails.incident_time ?? "");
+    const age: Record<string, number> = { "Just now": 0, "Within the last 24 hours": 1, "Within the last week": 3, "Within the last month": 14, "More than a month ago": 60 };
+    if (preset in age) return new Date(Date.now() - age[preset] * 24 * 60 * 60 * 1000);
+    if (guidedDate) {
+      const parsed = new Date(guidedDate);
+      if (!Number.isNaN(parsed.getTime())) return parsed;
     }
     return null;
   }
 
   function validateStep(current: number): string | null {
-    if (current === 1 && !flow.situation) {
-      return "Please choose the option that best matches what happened.";
+    if (current === 0 && !flow.category) return "Please choose the type of cyber crime.";
+    if (flow.category === "women_children") return null;
+    if (isFinancial && current === 1 && !flow.situation) return "Please choose the option that best matches what happened.";
+    if (isFinancial && current === 2) {
+      if (!flow.incidentType) return "Please select an incident type to continue.";
+      if (flow.incidentType !== "financial_fraud") return "This type isn't available yet. Please choose UPI / financial fraud.";
     }
-    if (current === 2) {
-      if (!flow.incidentType) {
-        return "Please select an incident type to continue.";
-      }
-      if (flow.incidentType !== "financial_fraud") {
-        return "This type isn't available yet. Please choose UPI / financial fraud.";
-      }
-    }
-    if (current === 3) {
-      if (!flow.timePreset) {
-        return "Please tell us when this happened — it decides how urgently you need to act.";
-      }
+    if (isFinancial && current === 3) {
+      if (!flow.timePreset) return "Please tell us when this happened - it decides how urgently you need to act.";
       const occurred = resolvedOccurredAt();
-      if (!occurred) {
-        return "Please enter the date and time of the transaction.";
-      }
-      if (occurred.getTime() > Date.now() + 60 * 1000) {
-        return "That time is in the future. Please check the date and time.";
-      }
+      if (!occurred) return "Please enter the date and time of the transaction.";
+      if (occurred.getTime() > Date.now() + 60 * 1000) return "That time is in the future. Please check the date and time.";
     }
-    if (current === 4) {
+    if (isFinancial && current === 4) {
       const amount = parseAmountInput(flow.amount);
-      if (amount === null || amount <= 0) {
-        return "Please enter the amount that left your account.";
-      }
-      if (!flow.paymentMethod || flow.paymentMethod === "unknown") {
-        return "Please select how the payment was made.";
-      }
+      if (amount === null || amount <= 0) return "Please enter the amount that left your account.";
+      if (!flow.paymentMethod || flow.paymentMethod === "unknown") return "Please select how the payment was made.";
     }
     return null;
+  }
+
+  async function finishGuidedCrime() {
+    const occurred = resolvedOccurredAt();
+    const incidentType = flow.category === "women_children" ? "women_children" : "other_cyber_crime";
+    if (!String(flow.otherDetails.incident_subtype ?? "") || !occurred) {
+      setErrorMessage("Some details are missing. Please go back and check each step.");
+      return;
+    }
+    setBusy(true);
+    try {
+      const incident = await createIncident({
+        incident_type: incidentType,
+        incident_subtype: String(flow.otherDetails.incident_subtype ?? ""),
+        affected_person_type: String(flow.otherDetails.affected_person_type ?? "") || null,
+        platform: String(flow.otherDetails.platform ?? "") || null,
+        account_type: String(flow.otherDetails.account_type ?? "") || null,
+        immediate_danger: flow.otherDetails.immediate_danger === "Yes",
+        threat_or_blackmail: flow.otherDetails.threat_or_blackmail === "Yes",
+        content_still_online: flow.otherDetails.content_still_online === "Yes",
+        account_access: String(flow.otherDetails.account_access ?? "") || null,
+        attacker_active: flow.otherDetails.attacker_active === "Yes",
+        sensitive_information_exposed: flow.otherDetails.sensitive_information_exposed === "Yes",
+        evidence_types: Array.isArray(flow.otherDetails.evidence_types) ? flow.otherDetails.evidence_types : [],
+        payment_method: "unknown",
+        details: flow.otherDetails,
+      });
+      await triageIncident(incident.id, {
+        incident_type: incidentType,
+        incident_subtype: String(flow.otherDetails.incident_subtype ?? ""),
+        affected_person_type: String(flow.otherDetails.affected_person_type ?? "") || null,
+        platform: String(flow.otherDetails.platform ?? "") || null,
+        account_type: String(flow.otherDetails.account_type ?? "") || null,
+        immediate_danger: flow.otherDetails.immediate_danger === "Yes",
+        threat_or_blackmail: flow.otherDetails.threat_or_blackmail === "Yes",
+        content_still_online: flow.otherDetails.content_still_online === "Yes",
+        account_access: String(flow.otherDetails.account_access ?? "") || null,
+        attacker_active: flow.otherDetails.attacker_active === "Yes",
+        sensitive_information_exposed: flow.otherDetails.sensitive_information_exposed === "Yes",
+        evidence_types: Array.isArray(flow.otherDetails.evidence_types) ? flow.otherDetails.evidence_types : [],
+        occurred_at: occurred.toISOString(),
+        payment_method: "unknown",
+        details: flow.otherDetails,
+      });
+      await Promise.all(flow.evidenceFiles.map((file) => uploadEvidence(incident.id, file)));
+      router.push(`/incident/${incident.id}/result`);
+    } catch (err) {
+      setErrorMessage(err instanceof ApiError ? err.message : "Something went wrong. Please try again.");
+      setBusy(false);
+    }
   }
 
   async function handleNext() {
@@ -119,6 +183,30 @@ export default function IncidentStartPage() {
       return;
     }
     setErrorMessage("");
+
+    if (step === 0) {
+      if (flow.category === "financial_fraud") {
+        setFlow((prev) => ({ ...prev, incidentType: "financial_fraud" }));
+        setStep(1);
+      } else if (flow.category === "other_cyber_crime") {
+        setGuidedIndex(0);
+        setStep(1);
+      } else if (flow.category === "women_children") {
+        setGuidedIndex(0);
+        setStep(1);
+      }
+      return;
+    }
+
+    if (flow.category === "women_children") {
+      await finishGuidedCrime();
+      return;
+    }
+
+    if (isOther) {
+      await finishGuidedCrime();
+      return;
+    }
 
     if (step === 1) {
       if (flow.incidentId) {
@@ -134,9 +222,7 @@ export default function IncidentStartPage() {
         setFlow((prev) => ({ ...prev, incidentId: incident.id }));
         setStep(2);
       } catch (err) {
-        setErrorMessage(
-          err instanceof ApiError ? err.message : "Something went wrong. Please try again."
-        );
+        setErrorMessage(err instanceof ApiError ? err.message : "Something went wrong. Please try again.");
       } finally {
         setBusy(false);
       }
@@ -166,16 +252,14 @@ export default function IncidentStartPage() {
       });
       router.push(`/incident/${flow.incidentId}/result`);
     } catch (err) {
-      setErrorMessage(
-        err instanceof ApiError ? err.message : "Something went wrong. Please try again."
-      );
+      setErrorMessage(err instanceof ApiError ? err.message : "Something went wrong. Please try again.");
       setBusy(false);
     }
   }
 
   function handleBack() {
     setErrorMessage("");
-    if (step === 1) return;
+    if (step === 0) return;
     setStep(step - 1);
   }
 
@@ -192,22 +276,41 @@ export default function IncidentStartPage() {
       </header>
 
       <div className="mx-auto max-w-3xl px-6 py-10">
-        <ProgressSteps steps={STEPS} currentStep={step} />
+        <ProgressSteps
+          steps={steps}
+          currentStep={isOther || flow.category === "women_children" ? guidedIndex + 2 : step + 1}
+        />
 
         <div className="mt-10">
-          {step === 1 && (
-            <StepSituation
-              value={flow.situation}
-              onChange={(value) => update("situation", value)}
+          {step === 0 && (
+            <StepCrimeCategory
+              value={flow.category}
+              onChange={(value) => {
+                update("category", value);
+                setGuidedIndex(0);
+              }}
             />
           )}
-          {step === 2 && (
-            <StepIncidentType
-              value={flow.incidentType}
-              onChange={(value) => update("incidentType", value)}
+          {(isOther || flow.category === "women_children") && step === 1 && (
+            <GuidedCrimeQuestions
+              category={flow.category === "women_children" ? "women_children" : "other_cyber_crime"}
+              subCategory={flow.otherSubCategory}
+              details={flow.otherDetails}
+              evidenceFiles={flow.evidenceFiles}
+              onSubCategoryChange={(value) => update("otherSubCategory", value)}
+              onDetailsChange={(value) => update("otherDetails", value)}
+              onEvidenceFilesChange={(value) => update("evidenceFiles", value)}
+              onProgress={setGuidedIndex}
+              onComplete={() => void finishGuidedCrime()}
             />
           )}
-          {step === 3 && (
+          {isFinancial && step === 1 && (
+            <StepSituation value={flow.situation} onChange={(value) => update("situation", value)} />
+          )}
+          {isFinancial && step === 2 && (
+            <StepIncidentType value={flow.incidentType} onChange={(value) => update("incidentType", value)} />
+          )}
+          {isFinancial && step === 3 && (
             <StepWhen
               preset={flow.timePreset}
               exactValue={flow.exactValue}
@@ -216,24 +319,16 @@ export default function IncidentStartPage() {
                   preset === "exact"
                     ? flow.exactValue || toDateTimeLocalValue(new Date())
                     : toDateTimeLocalValue(occurredAtFromPreset(preset));
-                setFlow((prev) => ({
-                  ...prev,
-                  timePreset: preset,
-                  exactValue: nextExact,
-                }));
+                setFlow((prev) => ({ ...prev, timePreset: preset, exactValue: nextExact }));
                 setErrorMessage("");
               }}
               onExactChange={(value) => {
-                setFlow((prev) => ({
-                  ...prev,
-                  timePreset: "exact",
-                  exactValue: value,
-                }));
+                setFlow((prev) => ({ ...prev, timePreset: "exact", exactValue: value }));
                 setErrorMessage("");
               }}
             />
           )}
-          {step === 4 && (
+          {isFinancial && step === 4 && (
             <StepAmount
               amount={flow.amount}
               paymentMethod={flow.paymentMethod}
@@ -241,40 +336,30 @@ export default function IncidentStartPage() {
               onPaymentMethodChange={(value) => update("paymentMethod", value)}
             />
           )}
-          {step === 5 && (
-            <StepTransactionId
-              value={flow.transactionId}
-              onChange={(value) => update("transactionId", value)}
-            />
+          {isFinancial && step === 5 && (
+            <StepTransactionId value={flow.transactionId} onChange={(value) => update("transactionId", value)} />
           )}
 
           {busy && (
             <div className="mt-6">
-              <LoadingState
-                message={
-                  step === 5
-                    ? "Working out what you should do first…"
-                    : "Starting your incident…"
-                }
-              />
+              <LoadingState message={step === 5 || isOther ? "Working out what you should do first..." : "Starting your incident..."} />
             </div>
           )}
 
           {errorMessage && !busy && (
             <div className="mt-6">
-              <ErrorState
-                message={errorMessage}
-                onRetry={handleNext}
-              />
+              <ErrorState message={errorMessage} onRetry={handleNext} />
             </div>
           )}
 
-          <FlowNav
-            onBack={step > 1 ? handleBack : undefined}
-            onNext={handleNext}
-            nextLabel={step === 5 ? "See what to do now" : "Continue"}
-            busy={busy}
-          />
+          {flow.category === "financial_fraud" || step === 0 ? (
+            <FlowNav
+              onBack={step > 0 ? handleBack : undefined}
+              onNext={handleNext}
+              nextLabel={isFinancial && step === 5 ? "See what to do now" : "Continue"}
+              busy={busy}
+            />
+          ) : null}
         </div>
       </div>
     </main>
