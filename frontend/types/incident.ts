@@ -80,6 +80,17 @@ export interface TriagePayload {
   amount?: number | null;
   payment_method: PaymentMethod;
   transaction_id?: string | null;
+  transaction_status?: "pending" | "completed" | "unknown" | null;
+  is_account_compromised?: boolean;
+  is_credentials_exposed?: boolean;
+  is_otp_shared?: boolean;
+  is_pin_shared?: boolean;
+  is_password_shared?: boolean;
+  is_remote_access_granted?: boolean;
+  unauthorized_activity_continuing?: boolean;
+  potential_additional_loss?: boolean;
+  account_secured?: boolean;
+  evidence_available?: boolean | null;
   details?: Record<string, unknown> | null;
 }
 
@@ -91,6 +102,17 @@ export interface Incident {
   incident_time: string | null;
   occurred_at: string | null;
   transaction_id: string | null;
+  transaction_status: string | null;
+  is_account_compromised: boolean | null;
+  is_credentials_exposed: boolean | null;
+  is_otp_shared: boolean | null;
+  is_pin_shared: boolean | null;
+  is_password_shared: boolean | null;
+  is_remote_access_granted: boolean | null;
+  unauthorized_activity_continuing: boolean | null;
+  potential_additional_loss: boolean | null;
+  account_secured: boolean | null;
+  evidence_available: boolean | null;
   incident_subtype: string | null;
   affected_person_type: string | null;
   platform: string | null;
@@ -107,6 +129,10 @@ export interface Incident {
   details: Record<string, unknown> | null;
   urgency: Urgency;
   urgency_computed_at: string | null;
+  severity: Urgency | null;
+  ongoing_risk: Urgency | null;
+  recovery_window: string | null;
+  urgency_reasons: UrgencyReason[] | null;
   status: IncidentStatus;
   created_at: string;
   updated_at: string;
@@ -130,6 +156,17 @@ export interface ActionPlan {
   complaint_draft: {
     body: string;
   };
+  severity?: Urgency | null;
+  ongoing_risk?: Urgency | null;
+  recovery_window?: string | null;
+  urgency_reasons?: UrgencyReason[];
+}
+
+export interface UrgencyReason {
+  factor: string;
+  rule_id: string;
+  human_readable_reason: string;
+  severity_contribution: Urgency;
 }
 
 export const INCIDENT_TYPE_OPTIONS: {

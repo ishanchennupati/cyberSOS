@@ -21,7 +21,7 @@ type Question = { key: string; prompt: string; help?: string; kind?: "text" | "l
 
 function questionSet(category: Props["category"], subCategory: OtherCrimeSubCategory | null, details: GuidedCrimeDetails): Question[] {
   if (category === "women_children") {
-    return [
+    const questions: Question[] = [
       { key: "incident_subtype", prompt: "What happened?", kind: "choice", options: ["Online harassment", "Cyberstalking", "Threats or blackmail", "Intimate/private content shared or threatened", "Sexual harassment", "Child exploitation / inappropriate contact", "Fake profile / impersonation", "Other"], required: true },
       { key: "immediate_danger", prompt: "Is anyone in immediate physical danger?", kind: "choice", options: ["Yes", "No", "I'm not sure"], required: true },
       { key: "affected_person_type", prompt: "Who is affected?", kind: "choice", options: ["Me", "A child", "Another woman", "Another person", "I'm reporting on behalf of someone else"], required: true },
@@ -31,6 +31,20 @@ function questionSet(category: Props["category"], subCategory: OtherCrimeSubCate
       { key: "evidence_types", prompt: "Do you have evidence of what happened?", kind: "choice", options: ["Screenshots", "Messages/chats", "Profile/account details", "Photos/videos", "URLs", "Other evidence", "I don't have evidence"], required: true },
       { key: "incident_time", prompt: "When did this happen?", kind: "choice", options: ["Just now", "Within the last 24 hours", "Within the last week", "Within the last month", "More than a month ago", "I'm not sure"], required: true },
     ];
+    if (String(details.incident_subtype).toLowerCase().includes("blackmail") || String(details.incident_subtype).toLowerCase().includes("intimate")) {
+      questions.splice(6, 0,
+        { key: "threat_is_ongoing", prompt: "Is the threat or pressure still ongoing?", kind: "choice", options: ["Yes", "No", "I'm not sure"], required: true },
+        { key: "content_already_published", prompt: "Has the content already been shared publicly or sent to someone else?", kind: "choice", options: ["Yes", "No", "I'm not sure"], required: true },
+      );
+    }
+    if (String(details.incident_subtype).toLowerCase().includes("stalk")) {
+      questions.splice(4, 0,
+        { key: "stalking_is_ongoing", prompt: "Is the person still contacting or following you?", kind: "choice", options: ["Yes", "No", "I'm not sure"], required: true },
+        { key: "offender_knows_victim_location", prompt: "Do they know where you live, study, or work?", kind: "choice", options: ["Yes", "No", "I'm not sure"], required: true },
+        { key: "threat_of_violence", prompt: "Have they threatened physical harm?", kind: "choice", options: ["Yes", "No", "I'm not sure"], required: true },
+      );
+    }
+    return questions;
   }
 
   const questions: Question[] = [
@@ -42,6 +56,8 @@ function questionSet(category: Props["category"], subCategory: OtherCrimeSubCate
   ];
   if (String(details.incident_subtype).toLowerCase().includes("phishing")) questions.push({ key: "credentials_entered", prompt: "Did you enter any information after opening the link?", kind: "choice", options: ["Yes", "No", "I'm not sure"], required: true });
   if (String(details.incident_subtype).toLowerCase().includes("malware")) questions.push({ key: "device_behaving_unusually", prompt: "Is the device behaving unusually?", kind: "choice", options: ["Yes", "No", "I'm not sure"], required: true });
+  if (String(details.incident_subtype).toLowerCase().includes("hack")) questions.push({ key: "unauthorized_activity_continuing", prompt: "Are unauthorized actions still happening?", kind: "choice", options: ["Yes", "No", "I'm not sure"], required: true });
+  if (String(details.incident_subtype).toLowerCase().includes("ransomware")) questions.push({ key: "ransomware_detected", prompt: "Are your files currently inaccessible?", kind: "choice", options: ["Yes", "No", "I'm not sure"], required: true });
   questions.push({ key: "incident_time", prompt: "When did this happen?", kind: "choice", options: ["Just now", "Within the last 24 hours", "Within the last week", "Within the last month", "More than a month ago", "I'm not sure"], required: true });
   questions.push({ key: "evidence_types", prompt: "Do you have evidence of what happened?", kind: "choice", options: ["Screenshots", "Emails", "Messages", "URLs", "Account/profile information", "Device information", "Other", "No evidence"], required: true });
   return questions;
@@ -54,12 +70,19 @@ const QUESTION_LABELS: Record<string, string> = {
   platform: "Platform",
   content_still_online: "Still online",
   threat_or_blackmail: "Threats",
+  threat_is_ongoing: "Ongoing threat",
+  content_already_published: "Published content",
+  stalking_is_ongoing: "Ongoing stalking",
+  offender_knows_victim_location: "Location known",
+  threat_of_violence: "Physical threat",
   account_type: "Account or service",
   account_access: "Access",
   attacker_active: "Active control",
   sensitive_information_exposed: "Sensitive information",
   credentials_entered: "Information entered",
   device_behaving_unusually: "Device status",
+  unauthorized_activity_continuing: "Ongoing activity",
+  ransomware_detected: "Ransomware status",
   incident_time: "When",
   evidence_types: "Evidence",
 };

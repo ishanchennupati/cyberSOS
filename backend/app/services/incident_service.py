@@ -34,6 +34,9 @@ from app.schemas.incident import (
     TriageRequest,
     IncidentDetailsUpdate,
 )
+from app.rules import determine_action_plan
+from app.rules.action_rules import determine_other_cyber_plan, determine_women_children_plan
+from app.rules.constants import AMOUNT_THRESHOLDS
 
 try:
     IST = ZoneInfo("Asia/Kolkata")
@@ -45,7 +48,7 @@ CYBERCRIME_PORTAL_URL = "https://cybercrime.gov.in"
 BANK_HELPLINE_PLACEHOLDER = "the number on the back of your card / in your bank app"
 
 # Amount at or above this (₹) bumps urgency one tier and adds a bank-desk action.
-LARGE_AMOUNT_THRESHOLD = 100_000.0
+LARGE_AMOUNT_THRESHOLD = float(AMOUNT_THRESHOLDS["fir"])
 
 # Product heuristics, intentionally separate from the financial-fraud clock.
 WOMEN_CHILDREN_THRESHOLDS = {"medium": 2, "high": 4, "critical": 7}
@@ -372,6 +375,26 @@ LARGE_VALUE_ACTION = _action(
     "the fraud/dispute team and note the reference they give you.",
 )
 
+_RULE_ACTIONS: dict[str, ActionItem] = {
+    "contact_bank_now": _BANK_NOW,
+    "contact_bank": _BANK_TODAY,
+    "contact_bank_if_not_already": _BANK_DISPUTE,
+    "call_1930": _CALL_1930_NOW,
+    "call_1930_or_file_online": _CALL_1930_TODAY,
+    "preserve_evidence": _PRESERVE_EVIDENCE,
+    "file_complaint": _FILE_PORTAL_TODAY,
+    "retrieve_transaction_id": _action(
+        "retrieve_transaction_id",
+        "Retrieve the transaction ID from your bank statement or UPI app",
+        "The transaction reference helps your bank and the cybercrime portal trace the payment.",
+    ),
+    "consider_fir": _action(
+        "bank_fraud_desk",
+        "Consider filing an FIR at your local police station in addition to the cyber complaint",
+        "For amounts of ₹1,00,000 or more, an FIR can support escalation alongside the cyber complaint.",
+    ),
+}
+
 # Full rules table keyed on (urgency, payment_method) — no silent fallthrough.
 ACTION_PLAN_RULES: dict[tuple[Urgency, PaymentMethod], tuple[ActionItem, ...]] = {
     (urgency, method): URGENCY_ACTIONS[urgency] + PAYMENT_ACTIONS[method]
@@ -423,13 +446,9 @@ def compute_urgency(
     *,
     now: datetime | None = None,
 ) -> Urgency:
-    """
-    Time since the transaction is the primary signal. Amount is a secondary
-    modifier: at/above LARGE_AMOUNT_THRESHOLD, bump one tier.
-    """
+    """Legacy helper retained for Phase 1 callers; triage uses the Phase 2 rules."""
     clock = _as_utc(now or datetime.now(timezone.utc))
-    elapsed = clock - _as_utc(occurred_at)
-    urgency = _time_urgency(elapsed)
+    urgency = _time_urgency(clock - _as_utc(occurred_at))
     if is_large_amount(amount):
         urgency = _bump_urgency(urgency)
     return urgency
@@ -544,11 +563,27 @@ def render_complaint_draft(
 def build_action_plan(incident: Incident) -> ActionPlanResponse:
     if incident.incident_type in {IncidentType.women_children, IncidentType.other_cyber_crime}:
         return build_category_action_plan(incident)
-    urgency = incident.urgency
-    large = is_large_amount(incident.amount)
-    actions = build_action_list(
-        urgency, incident.payment_method, large_amount=large
+    rule_plan = determine_action_plan(
+        incident.incident_type,
+        incident.occurred_at or incident.incident_time,
+        incident.amount,
+        bool(incident.transaction_id),
+        transaction_status=incident.transaction_status,
+        is_fraud_ongoing=bool(incident.is_fraud_ongoing),
+        is_account_compromised=bool(incident.is_account_compromised),
+        is_credentials_exposed=bool(incident.is_credentials_exposed),
+        is_otp_shared=bool(incident.is_otp_shared),
+        is_pin_shared=bool(incident.is_pin_shared),
+        is_password_shared=bool(incident.is_password_shared),
+        is_remote_access_granted=bool(incident.is_remote_access_granted),
+        unauthorized_activity_continuing=bool(incident.unauthorized_activity_continuing),
+        potential_additional_loss=bool(incident.potential_additional_loss),
+        account_secured=bool(incident.account_secured),
+        evidence_available=incident.evidence_available,
     )
+    urgency = rule_plan.priority
+    large = is_large_amount(incident.amount)
+    actions = [_RULE_ACTIONS[action_key] for action_key in rule_plan.actions]
     body = render_complaint_draft(
         incident_type=incident.incident_type,
         occurred_at=incident.occurred_at or incident.incident_time,
@@ -567,6 +602,10 @@ def build_action_plan(incident: Incident) -> ActionPlanResponse:
         large_amount=large,
         actions=actions,
         complaint_draft=ComplaintDraft(body=body),
+        severity=rule_plan.severity,
+        ongoing_risk=rule_plan.ongoing_risk,
+        recovery_window=rule_plan.recovery_window,
+        urgency_reasons=rule_plan.reasons,
     )
 
 
@@ -646,10 +685,21 @@ def _category_actions(incident: Incident) -> list[ActionItem]:
 
 
 def build_category_action_plan(incident: Incident) -> ActionPlanResponse:
-    urgency, score = (compute_women_children_urgency(incident) if incident.incident_type == IncidentType.women_children else compute_other_cyber_urgency(incident))
+    if incident.urgency_reasons:
+        urgency = incident.urgency
+        score = incident.urgency_score
+        reasons = incident.urgency_reasons
+        severity = incident.severity or urgency
+        ongoing_risk = incident.ongoing_risk or urgency
+    elif incident.incident_type == IncidentType.women_children:
+        category_plan = determine_women_children_plan(incident.incident_subtype, incident.affected_person_type, incident.immediate_danger, incident.threat_or_blackmail, incident.content_still_online, incident.details)
+        urgency, score, reasons, severity, ongoing_risk = category_plan.priority, None, category_plan.reasons, category_plan.severity, category_plan.ongoing_risk
+    else:
+        category_plan = determine_other_cyber_plan(incident.incident_subtype, incident.account_access, incident.attacker_active, incident.sensitive_information_exposed, incident.details)
+        urgency, score, reasons, severity, ongoing_risk = category_plan.priority, None, category_plan.reasons, category_plan.severity, category_plan.ongoing_risk
     actions = _category_actions(incident)
-    message = "Your immediate safety comes first." if incident.immediate_danger else "Your answers indicate that this situation may require prompt action."
-    return ActionPlanResponse(urgency=urgency, urgency_label=URGENCY_BADGE[urgency], core_message=message, large_amount=False, actions=actions, complaint_draft=ComplaintDraft(body=render_complaint_draft(incident_type=incident.incident_type, occurred_at=incident.occurred_at or incident.incident_time, amount=None, payment_method=PaymentMethod.unknown, transaction_id=None, other_crime_sub_category=incident.other_crime_sub_category, details=incident.details, urgency=urgency, actions=actions)))
+    message = "Your immediate safety comes first." if incident.immediate_danger else "Based on the information provided, this incident may require prompt action."
+    return ActionPlanResponse(urgency=urgency, urgency_label=URGENCY_BADGE[urgency], core_message=message, large_amount=False, actions=actions, complaint_draft=ComplaintDraft(body=render_complaint_draft(incident_type=incident.incident_type, occurred_at=incident.occurred_at or incident.incident_time, amount=None, payment_method=PaymentMethod.unknown, transaction_id=None, other_crime_sub_category=incident.other_crime_sub_category, details=incident.details, urgency=urgency, actions=actions)), severity=severity, ongoing_risk=ongoing_risk, recovery_window="not_applicable", urgency_reasons=reasons)
 
 
 # --- Persistence -------------------------------------------------------------
@@ -742,14 +792,24 @@ def triage_incident(
 ) -> Incident:
     clock = _as_utc(now or datetime.now(timezone.utc))
     occurred_at = _as_utc(payload.occurred_at)
-    urgency = compute_urgency(occurred_at, payload.amount, now=clock)
-
     incident.incident_type = payload.incident_type
     incident.occurred_at = occurred_at
     incident.incident_time = occurred_at
     incident.amount = payload.amount
     incident.payment_method = payload.payment_method
     incident.transaction_id = payload.transaction_id
+    incident.transaction_status = payload.transaction_status
+    incident.is_fraud_ongoing = payload.is_fraud_ongoing
+    incident.is_account_compromised = payload.is_account_compromised
+    incident.is_credentials_exposed = payload.is_credentials_exposed
+    incident.is_otp_shared = payload.is_otp_shared
+    incident.is_pin_shared = payload.is_pin_shared
+    incident.is_password_shared = payload.is_password_shared
+    incident.is_remote_access_granted = payload.is_remote_access_granted
+    incident.unauthorized_activity_continuing = payload.unauthorized_activity_continuing
+    incident.potential_additional_loss = payload.potential_additional_loss
+    incident.account_secured = payload.account_secured
+    incident.evidence_available = payload.evidence_available
     incident.other_crime_sub_category = payload.other_crime_sub_category
     incident.details = payload.details
     incident.incident_subtype = payload.incident_subtype
@@ -763,12 +823,47 @@ def triage_incident(
     incident.attacker_active = payload.attacker_active
     incident.sensitive_information_exposed = payload.sensitive_information_exposed
     incident.evidence_types = payload.evidence_types
-    if payload.incident_type == IncidentType.women_children:
-        urgency, score = compute_women_children_urgency(incident, now=clock)
+    if payload.incident_type == IncidentType.financial_fraud:
+        rule_plan = determine_action_plan(
+            payload.incident_type,
+            occurred_at,
+            payload.amount,
+            bool(payload.transaction_id),
+            now=clock,
+            transaction_status=payload.transaction_status,
+            is_fraud_ongoing=payload.is_fraud_ongoing,
+            is_account_compromised=payload.is_account_compromised,
+            is_credentials_exposed=payload.is_credentials_exposed,
+            is_otp_shared=payload.is_otp_shared,
+            is_pin_shared=payload.is_pin_shared,
+            is_password_shared=payload.is_password_shared,
+            is_remote_access_granted=payload.is_remote_access_granted,
+            unauthorized_activity_continuing=payload.unauthorized_activity_continuing,
+            potential_additional_loss=payload.potential_additional_loss,
+            account_secured=payload.account_secured,
+            evidence_available=payload.evidence_available,
+        )
+        urgency, score = rule_plan.priority, None
+        incident.severity = rule_plan.severity
+        incident.ongoing_risk = rule_plan.ongoing_risk
+        incident.recovery_window = rule_plan.recovery_window
+        incident.urgency_reasons = rule_plan.reasons
+    elif payload.incident_type == IncidentType.women_children:
+        category_plan = determine_women_children_plan(payload.incident_subtype, payload.affected_person_type, payload.immediate_danger, payload.threat_or_blackmail, payload.content_still_online, payload.details)
+        urgency, score = category_plan.priority, compute_women_children_urgency(incident, now=clock)[1]
+        incident.severity = category_plan.severity
+        incident.ongoing_risk = category_plan.ongoing_risk
+        incident.recovery_window = category_plan.recovery_window
+        incident.urgency_reasons = category_plan.reasons
     elif payload.incident_type == IncidentType.other_cyber_crime and payload.incident_subtype:
-        urgency, score = compute_other_cyber_urgency(incident, now=clock)
+        category_plan = determine_other_cyber_plan(payload.incident_subtype, payload.account_access, payload.attacker_active, payload.sensitive_information_exposed, payload.details)
+        urgency, score = category_plan.priority, compute_other_cyber_urgency(incident, now=clock)[1]
+        incident.severity = category_plan.severity
+        incident.ongoing_risk = category_plan.ongoing_risk
+        incident.recovery_window = category_plan.recovery_window
+        incident.urgency_reasons = category_plan.reasons
     else:
-        urgency, score = urgency, None
+        urgency, score = Urgency.medium, None
     incident.urgency = urgency
     incident.urgency_score = score
     incident.urgency_computed_at = clock

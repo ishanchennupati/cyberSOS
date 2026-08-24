@@ -95,6 +95,19 @@ class IncidentRead(BaseModel):
     incident_time: datetime | None
     occurred_at: datetime | None = None
     transaction_id: str | None = None
+    transaction_status: str | None = None
+    is_fraud_ongoing: bool | None = None
+    is_fraud_ongoing: bool | None = None
+    is_account_compromised: bool | None = None
+    is_credentials_exposed: bool | None = None
+    is_otp_shared: bool | None = None
+    is_pin_shared: bool | None = None
+    is_password_shared: bool | None = None
+    is_remote_access_granted: bool | None = None
+    unauthorized_activity_continuing: bool | None = None
+    potential_additional_loss: bool | None = None
+    account_secured: bool | None = None
+    evidence_available: bool | None = None
     incident_subtype: str | None = None
     affected_person_type: str | None = None
     platform: str | None = None
@@ -111,6 +124,10 @@ class IncidentRead(BaseModel):
     urgency: Urgency
     urgency_score: int | None = None
     urgency_computed_at: datetime | None = None
+    severity: Urgency | None = None
+    ongoing_risk: Urgency | None = None
+    recovery_window: str | None = None
+    urgency_reasons: list[dict[str, str]] | None = None
     status: IncidentStatus
     created_at: datetime
     updated_at: datetime
@@ -140,6 +157,18 @@ class TriageRequest(BaseModel):
     amount: float | None = Field(default=None, ge=0)
     payment_method: PaymentMethod = PaymentMethod.unknown
     transaction_id: str | None = Field(default=None, max_length=128)
+    transaction_status: str | None = None
+    is_fraud_ongoing: bool = False
+    is_account_compromised: bool = False
+    is_credentials_exposed: bool = False
+    is_otp_shared: bool = False
+    is_pin_shared: bool = False
+    is_password_shared: bool = False
+    is_remote_access_granted: bool = False
+    unauthorized_activity_continuing: bool = False
+    potential_additional_loss: bool = False
+    account_secured: bool = False
+    evidence_available: bool | None = None
     other_crime_sub_category: OtherCrimeSubCategory | None = None
     details: dict[str, object] | None = None
 
@@ -207,3 +236,7 @@ class ActionPlanResponse(BaseModel):
     large_amount: bool
     actions: list[ActionItem]
     complaint_draft: ComplaintDraft
+    severity: Urgency | None = None
+    ongoing_risk: Urgency | None = None
+    recovery_window: str | None = None
+    urgency_reasons: list[dict[str, str]] = []
