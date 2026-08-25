@@ -52,10 +52,15 @@ export default function IncidentResultPage() {
     <main className="min-h-screen bg-paper">
       <header className="border-b border-line bg-surface">
         <div className="mx-auto flex max-w-3xl items-center justify-between px-6 py-4">
-          <Link href="/" className="flex items-center gap-2 text-sm text-ink-muted hover:text-ink">
-            <ArrowLeft size={16} aria-hidden="true" />
-            Home
-          </Link>
+          <div className="flex gap-4">
+            <Link href="/" className="flex items-center gap-2 text-sm text-ink-muted hover:text-ink">
+              <ArrowLeft size={16} aria-hidden="true" />
+              Home
+            </Link>
+            <Link href={`/incident/start?id=${id}`} className="flex items-center gap-2 text-sm text-ink-muted hover:text-ink border-l border-line pl-4">
+              Edit answers
+            </Link>
+          </div>
           <span className="font-display text-lg italic text-ink">CyberSOS</span>
         </div>
       </header>
@@ -65,7 +70,7 @@ export default function IncidentResultPage() {
         <div className="mt-10">
           {loading && <LoadingState message="Loading your action plan…" />}
           {error && !loading && <ErrorState message={error} onRetry={load} />}
-          {plan && !loading && <ResultScreen plan={plan} />}
+          {plan && !loading && <ResultScreen plan={plan} incidentId={id} />}
         </div>
       </div>
     </main>

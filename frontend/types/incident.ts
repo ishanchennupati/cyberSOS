@@ -92,42 +92,42 @@ export const INCIDENT_TYPE_OPTIONS: {
     id: "phishing",
     label: "Phishing / fake website",
     description: "A fake link, OTP trap, or lookalike site.",
-    enabled: false,
+    enabled: true,
   },
   {
     id: "identity_theft",
     label: "Identity theft",
     description: "Someone used your KYC, Aadhaar, or PAN without you.",
-    enabled: false,
+    enabled: true,
   },
   {
     id: "social_media",
     label: "Social media / impersonation",
     description: "A hacked or fake profile used to cheat you or others.",
-    enabled: false,
+    enabled: true,
   },
   {
     id: "job_scam",
     label: "Job or investment scam",
     description: "A fake job, trading tip, or 'guaranteed return'.",
-    enabled: false,
+    enabled: true,
   },
   {
     id: "other",
     label: "Something else",
     description: "Another kind of cyber incident.",
-    enabled: false,
+    enabled: true,
   },
 ];
 
 export const PAYMENT_METHOD_OPTIONS: {
-  id: Exclude<PaymentMethod, "unknown" | "bank_transfer" | "card">;
+  id: PaymentMethod;
   label: string;
   description: string;
 }[] = [
-  { id: "upi", label: "UPI app", description: "GPay, PhonePe, Paytm, BHIM, or similar" },
-  { id: "debit_card", label: "Debit card", description: "ATM / debit card payment or swipe" },
-  { id: "credit_card", label: "Credit card", description: "Credit card payment or swipe" },
-  { id: "net_banking", label: "Net banking", description: "Bank website or app transfer" },
-  { id: "wallet", label: "Wallet", description: "Paytm wallet, Amazon Pay, or similar" },
+  { id: "upi", label: "UPI", description: "GPay, PhonePe, Paytm, BHIM" },
+  { id: "net_banking", label: "Bank transfer / Net banking", description: "Bank website or mobile app" },
+  { id: "card", label: "Debit / Credit card", description: "Online, ATM, or card transaction" },
+  { id: "wallet", label: "Wallet", description: "Paytm Wallet, Amazon Pay, etc." },
+  { id: "unknown", label: "Other / Not sure", description: "" },
 ];

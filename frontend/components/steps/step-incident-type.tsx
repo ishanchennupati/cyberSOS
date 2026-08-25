@@ -11,8 +11,7 @@ export function StepIncidentType({ value, onChange }: StepIncidentTypeProps) {
     <div>
       <h1 className="font-display text-3xl text-ink sm:text-4xl">What kind of incident is this?</h1>
       <p className="mt-3 max-w-xl text-[15px] leading-relaxed text-ink-muted">
-        Phase 1 of CyberSOS is built for UPI and financial fraud. Other types are listed so you
-        can see what&rsquo;s coming — they aren&rsquo;t available yet.
+        Select the incident category that best fits your situation to help us generate your action plan.
       </p>
       <div
         role="radiogroup"

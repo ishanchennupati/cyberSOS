@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, Suspense } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 
 import { ErrorState } from "@/components/error-state";
@@ -14,7 +14,7 @@ import { StepIncidentType } from "@/components/steps/step-incident-type";
 import { StepSituation, type SituationId } from "@/components/steps/step-situation";
 import { StepTransactionId } from "@/components/steps/step-transaction-id";
 import { StepWhen } from "@/components/steps/step-when";
-import { createIncident, triageIncident, ApiError } from "@/lib/api";
+import { createIncident, triageIncident, getIncident, ApiError } from "@/lib/api";
 import { parseAmountInput } from "@/lib/format";
 import {
   fromDateTimeLocalValue,
@@ -34,6 +34,7 @@ const STEPS = [
 
 type FlowState = {
   situation: SituationId | null;
+  situationDescription?: string;
   incidentId: string | null;
   incidentType: IncidentType | null;
   timePreset: TimePreset | null;
@@ -45,6 +46,7 @@ type FlowState = {
 
 const INITIAL_STATE: FlowState = {
   situation: null,
+  situationDescription: "",
   incidentId: null,
   incidentType: null,
   timePreset: null,
@@ -54,12 +56,65 @@ const INITIAL_STATE: FlowState = {
   transactionId: "",
 };
 
-export default function IncidentStartPage() {
+function IncidentStartFlow() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const editId = searchParams.get("id");
+
   const [step, setStep] = useState(1);
   const [flow, setFlow] = useState<FlowState>(INITIAL_STATE);
   const [errorMessage, setErrorMessage] = useState("");
   const [busy, setBusy] = useState(false);
+
+  // Load state from sessionStorage or API
+  useEffect(() => {
+    if (!editId) return;
+
+    async function load() {
+      setBusy(true);
+      try {
+        const cached = sessionStorage.getItem(`cybersos_flow_${editId}`);
+        if (cached) {
+          const parsed = JSON.parse(cached) as FlowState;
+          setFlow(parsed);
+          return;
+        }
+
+        const incident = await getIncident(editId);
+        
+        // Infer a sensible default situation
+        let inferredSituation: SituationId = "money_taken";
+        if (incident.incident_type !== "financial_fraud") {
+          inferredSituation = "other_cybercrime";
+        }
+
+        setFlow({
+          situation: inferredSituation,
+          situationDescription: "",
+          incidentId: incident.id,
+          incidentType: incident.incident_type,
+          timePreset: "exact",
+          exactValue: incident.occurred_at ? toDateTimeLocalValue(new Date(incident.occurred_at)) : "",
+          amount: incident.amount !== null ? String(incident.amount) : "",
+          paymentMethod: incident.payment_method,
+          transactionId: incident.transaction_id || "",
+        });
+      } catch (err) {
+        setErrorMessage("Failed to load your incident details.");
+      } finally {
+        setBusy(false);
+      }
+    }
+
+    void load();
+  }, [editId]);
+
+  // Save state to sessionStorage when it changes
+  useEffect(() => {
+    if (flow.incidentId) {
+      sessionStorage.setItem(`cybersos_flow_${flow.incidentId}`, JSON.stringify(flow));
+    }
+  }, [flow]);
 
   function update<K extends keyof FlowState>(key: K, value: FlowState[K]) {
     setFlow((prev) => ({ ...prev, [key]: value }));
@@ -84,9 +139,6 @@ export default function IncidentStartPage() {
       if (!flow.incidentType) {
         return "Please select an incident type to continue.";
       }
-      if (flow.incidentType !== "financial_fraud") {
-        return "This type isn't available yet. Please choose UPI / financial fraud.";
-      }
     }
     if (current === 3) {
       if (!flow.timePreset) {
@@ -105,7 +157,7 @@ export default function IncidentStartPage() {
       if (amount === null || amount <= 0) {
         return "Please enter the amount that left your account.";
       }
-      if (!flow.paymentMethod || flow.paymentMethod === "unknown") {
+      if (!flow.paymentMethod) {
         return "Please select how the payment was made.";
       }
     }
@@ -199,6 +251,8 @@ export default function IncidentStartPage() {
             <StepSituation
               value={flow.situation}
               onChange={(value) => update("situation", value)}
+              description={flow.situationDescription || ""}
+              onDescriptionChange={(value) => update("situationDescription", value)}
             />
           )}
           {step === 2 && (
@@ -278,5 +332,17 @@ export default function IncidentStartPage() {
         </div>
       </div>
     </main>
+  );
+}
+
+export default function IncidentStartPage() {
+  return (
+    <Suspense fallback={
+      <main className="min-h-screen bg-paper flex items-center justify-center">
+        <LoadingState message="Loading..." />
+      </main>
+    }>
+      <IncidentStartFlow />
+    </Suspense>
   );
 }

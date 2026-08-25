@@ -124,9 +124,10 @@ function ActionRow({ item, index }: { item: ActionItem; index: number }) {
 
 interface ResultScreenProps {
   plan: ActionPlan;
+  incidentId: string;
 }
 
-export function ResultScreen({ plan }: ResultScreenProps) {
+export function ResultScreen({ plan, incidentId }: ResultScreenProps) {
   const badge = BADGE[plan.urgency];
   const Icon = badge.icon;
   const [showDraft, setShowDraft] = useState(false);
@@ -212,11 +213,15 @@ export function ResultScreen({ plan }: ResultScreenProps) {
         )}
       </div>
 
-      <p className="mt-8 text-sm text-ink-muted">
-        <Link href="/" className="underline-offset-2 hover:underline">
+      <div className="mt-8 flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
+        <Link href={`/incident/start?id=${incidentId}`} className="text-sm font-medium text-calm underline-offset-2 hover:underline">
+          Go back to edit your answers
+        </Link>
+        <span className="hidden sm:inline text-line" aria-hidden="true">|</span>
+        <Link href="/" className="text-sm text-ink-muted underline-offset-2 hover:underline">
           Back to CyberSOS home
         </Link>
-      </p>
+      </div>
     </div>
   );
 }
