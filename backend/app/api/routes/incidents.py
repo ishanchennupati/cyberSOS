@@ -1,12 +1,15 @@
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from sqlalchemy.orm import Session
 
+from app.core.config import get_settings
 from app.db.session import get_db
 from app.schemas.incident import (
     ActionPlanResponse,
     IncidentCreate,
+    IncidentDetailsUpdate,
+    EvidenceRead,
     IncidentRead,
     TriageRequest,
 )
@@ -39,6 +42,33 @@ def triage_incident(
     if incident is None:
         raise HTTPException(status_code=404, detail="Incident not found")
     return incident_service.triage_incident(db, incident, payload)
+
+
+@router.patch("/{incident_id}/details", response_model=IncidentRead)
+def update_incident_details(
+    incident_id: uuid.UUID,
+    payload: IncidentDetailsUpdate,
+    db: Session = Depends(get_db),
+) -> IncidentRead:
+    incident = incident_service.get_incident(db, incident_id)
+    if incident is None:
+        raise HTTPException(status_code=404, detail="Incident not found")
+    return incident_service.update_incident_details(db, incident, payload)
+
+
+@router.post("/{incident_id}/evidence", response_model=EvidenceRead, status_code=201)
+def upload_evidence(
+    incident_id: uuid.UUID,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+) -> EvidenceRead:
+    incident = incident_service.get_incident(db, incident_id)
+    if incident is None:
+        raise HTTPException(status_code=404, detail="Incident not found")
+    try:
+        return incident_service.save_evidence(db, incident, file, get_settings().EVIDENCE_STORAGE_DIR)
+    except ValueError as exc:
+        raise HTTPException(status_code=413, detail=str(exc)) from exc
 
 
 @router.get("/{incident_id}/action-plan", response_model=ActionPlanResponse)

@@ -1,10 +1,26 @@
 export type IncidentType =
+  | "women_children"
   | "financial_fraud"
+  | "other_cyber_crime"
   | "phishing"
   | "identity_theft"
   | "social_media"
   | "job_scam"
   | "other";
+
+export type TopLevelCrimeCategory =
+  | "women_children"
+  | "financial_fraud"
+  | "other_cyber_crime";
+
+export type OtherCrimeSubCategory =
+  | "online_social_media"
+  | "ransomware"
+  | "hacking"
+  | "cryptocurrency"
+  | "online_trafficking"
+  | "online_gambling"
+  | "any_other";
 
 export type PaymentMethod =
   | "upi"
@@ -28,17 +44,54 @@ export type IncidentStatus =
 
 export interface IncidentCreatePayload {
   incident_type: IncidentType;
+  incident_subtype?: string | null;
+  affected_person_type?: string | null;
+  platform?: string | null;
+  account_type?: string | null;
+  immediate_danger?: boolean | null;
+  threat_or_blackmail?: boolean | null;
+  content_still_online?: boolean | null;
+  account_access?: string | null;
+  attacker_active?: boolean | null;
+  sensitive_information_exposed?: boolean | null;
+  evidence_types?: string[] | null;
+  other_crime_sub_category?: OtherCrimeSubCategory | null;
   payment_method: PaymentMethod;
   amount?: number | null;
   incident_time?: string | null;
+  details?: Record<string, unknown> | null;
 }
 
 export interface TriagePayload {
   incident_type: IncidentType;
+  incident_subtype?: string | null;
+  affected_person_type?: string | null;
+  platform?: string | null;
+  account_type?: string | null;
+  immediate_danger?: boolean | null;
+  threat_or_blackmail?: boolean | null;
+  content_still_online?: boolean | null;
+  account_access?: string | null;
+  attacker_active?: boolean | null;
+  sensitive_information_exposed?: boolean | null;
+  evidence_types?: string[] | null;
+  other_crime_sub_category?: OtherCrimeSubCategory | null;
   occurred_at: string;
-  amount: number;
+  amount?: number | null;
   payment_method: PaymentMethod;
   transaction_id?: string | null;
+  transaction_status?: "pending" | "completed" | "unknown" | null;
+  is_account_compromised?: boolean;
+  is_credentials_exposed?: boolean;
+  is_otp_shared?: boolean;
+  is_pin_shared?: boolean;
+  is_password_shared?: boolean;
+  is_remote_access_granted?: boolean;
+  unauthorized_activity_continuing?: boolean;
+  potential_additional_loss?: boolean;
+  account_secured?: boolean;
+  evidence_available?: boolean | null;
+  details?: Record<string, unknown> | null;
 }
 
 export interface Incident {
@@ -49,8 +102,37 @@ export interface Incident {
   incident_time: string | null;
   occurred_at: string | null;
   transaction_id: string | null;
+  transaction_status: string | null;
+  is_account_compromised: boolean | null;
+  is_credentials_exposed: boolean | null;
+  is_otp_shared: boolean | null;
+  is_pin_shared: boolean | null;
+  is_password_shared: boolean | null;
+  is_remote_access_granted: boolean | null;
+  unauthorized_activity_continuing: boolean | null;
+  potential_additional_loss: boolean | null;
+  account_secured: boolean | null;
+  evidence_available: boolean | null;
+  incident_subtype: string | null;
+  affected_person_type: string | null;
+  platform: string | null;
+  account_type: string | null;
+  immediate_danger: boolean | null;
+  threat_or_blackmail: boolean | null;
+  content_still_online: boolean | null;
+  account_access: string | null;
+  attacker_active: boolean | null;
+  sensitive_information_exposed: boolean | null;
+  evidence_types: string[] | null;
+  urgency_score: number | null;
+  other_crime_sub_category: OtherCrimeSubCategory | null;
+  details: Record<string, unknown> | null;
   urgency: Urgency;
   urgency_computed_at: string | null;
+  severity: Urgency | null;
+  ongoing_risk: Urgency | null;
+  recovery_window: string | null;
+  urgency_reasons: UrgencyReason[] | null;
   status: IncidentStatus;
   created_at: string;
   updated_at: string;
@@ -74,6 +156,17 @@ export interface ActionPlan {
   complaint_draft: {
     body: string;
   };
+  severity?: Urgency | null;
+  ongoing_risk?: Urgency | null;
+  recovery_window?: string | null;
+  urgency_reasons?: UrgencyReason[];
+}
+
+export interface UrgencyReason {
+  factor: string;
+  rule_id: string;
+  human_readable_reason: string;
+  severity_contribution: Urgency;
 }
 
 export const INCIDENT_TYPE_OPTIONS: {
@@ -118,6 +211,46 @@ export const INCIDENT_TYPE_OPTIONS: {
     description: "Another kind of cyber incident.",
     enabled: true,
   },
+];
+
+export const TOP_LEVEL_CRIME_OPTIONS: {
+  id: TopLevelCrimeCategory;
+  label: string;
+  description: string;
+}[] = [
+  {
+    id: "women_children",
+    label: "Women/Children Related Crime",
+    description: "Sensitive reports should go directly to the official government portal.",
+  },
+  {
+    id: "financial_fraud",
+    label: "Financial Fraud",
+    description: "Money sent or taken through UPI, card, net banking, wallet, or similar.",
+  },
+  {
+    id: "other_cyber_crime",
+    label: "Other Cyber Crime",
+    description: "Social media crime, ransomware, hacking, cryptocurrency, trafficking, gambling, or another cyber crime.",
+  },
+];
+
+export const OTHER_CRIME_OPTIONS: {
+  id: OtherCrimeSubCategory;
+  label: string;
+  description: string;
+}[] = [
+  {
+    id: "online_social_media",
+    label: "Online and Social Media Related Crime",
+    description: "Bullying, stalking, phishing email, hacked or fake profiles, job/matrimonial fraud, or threats.",
+  },
+  { id: "ransomware", label: "Ransomware", description: "Device or data locked for payment or extortion." },
+  { id: "hacking", label: "Hacking", description: "Unauthorized access, data breach, website defacement, or account/server compromise." },
+  { id: "cryptocurrency", label: "Cryptocurrency Related Crime", description: "Fraud, extortion, or suspicious transfer involving cryptocurrency." },
+  { id: "online_trafficking", label: "Online Trafficking", description: "Online sale or movement of trafficked goods or people." },
+  { id: "online_gambling", label: "Online Gambling", description: "Poker, betting, casino, or related gambling activity online." },
+  { id: "any_other", label: "Any Other Cyber Crime", description: "A cyber crime that does not fit the listed categories." },
 ];
 
 export const PAYMENT_METHOD_OPTIONS: {

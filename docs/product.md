@@ -31,9 +31,10 @@ Give that person a calm, trustworthy layer that:
 CyberSOS is a citizen-support layer, not a replacement for the government's
 own reporting systems — every response reinforces that distinction.
 
-## Current MVP scope (Phase 0)
+## Current MVP scope
 
-- Financial fraud / UPI fraud only
+- Financial fraud / UPI fraud guided questions
+- Guided questions for other cyber crime and women/children related crime
 - Landing page explaining the product and its limits
 - A first step of the incident flow ("what happened?")
 - An `incidents` record created in Postgres via the API
@@ -42,10 +43,10 @@ own reporting systems — every response reinforces that distinction.
 
 ## Intentionally out of scope (this phase)
 
-- Any AI-driven triage, classification, or chat
+- AI-driven question selection and drafting (the current question provider is deterministic)
 - OCR or evidence/image analysis
 - Real integration with banks, UPI providers, 1930, or cybercrime.gov.in
-- Actual complaint submission
+- Actual government complaint submission (the user still files through the official portal)
 - Authentication and accounts
 - Notifications
 - Payment processing

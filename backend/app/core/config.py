@@ -21,6 +21,7 @@ class Settings(BaseSettings):
 
     SERVICE_NAME: str = "cybersos-api"
     API_V1_PREFIX: str = "/api/v1"
+    EVIDENCE_STORAGE_DIR: str = "./evidence"
 
     @property
     def cors_origins_list(self) -> list[str]:

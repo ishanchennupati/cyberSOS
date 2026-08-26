@@ -162,6 +162,22 @@ export function ResultScreen({ plan, incidentId }: ResultScreenProps) {
         </div>
       </div>
 
+      {(plan.urgency_reasons?.length || plan.recovery_window) && (
+        <section className="mt-6 rounded-lg border border-line bg-surface px-5 py-5" aria-labelledby="urgency-reasons">
+          <h2 id="urgency-reasons" className="font-display text-2xl text-ink">Why this is urgent</h2>
+          <ul className="mt-3 list-disc space-y-2 pl-5 text-sm leading-relaxed text-ink-muted">
+            {plan.urgency_reasons?.map((reason) => (
+              <li key={reason.rule_id}>{reason.human_readable_reason}</li>
+            ))}
+          </ul>
+          {plan.recovery_window && plan.recovery_window !== "not_applicable" && (
+            <p className="mt-4 border-t border-line pt-3 text-sm text-ink-muted">
+              Recovery window: <strong className="text-ink">{plan.recovery_window.replaceAll("_", " ")}</strong>. Immediate action may improve the opportunity for intervention; recovery is not guaranteed.
+            </p>
+          )}
+        </section>
+      )}
+
       <h2 className="mt-10 font-display text-2xl text-ink">Do these, in this order</h2>
       <ol className="mt-4 overflow-hidden rounded-lg border border-line bg-surface">
         {plan.actions.map((item, index) => (
@@ -175,8 +191,8 @@ export function ResultScreen({ plan, incidentId }: ResultScreenProps) {
         </p>
         <h2 className="mt-2 font-display text-2xl text-ink">Prepare your complaint</h2>
         <p className="mt-2 max-w-xl text-[15px] leading-relaxed text-ink-muted">
-          A summary from the details you just gave us, ready to paste into cybercrime.gov.in or
-          read out on 1930. Nothing has been submitted on your behalf.
+          Your answers are now a complaint draft. Review it, then open the official portal to file
+          it yourself. CyberSOS does not submit complaints without a government integration and your confirmation.
         </p>
         {!showDraft ? (
           <Button
@@ -206,7 +222,7 @@ export function ResultScreen({ plan, incidentId }: ResultScreenProps) {
               rel="noopener noreferrer"
               className="mt-4 inline-flex items-center gap-2 text-sm font-medium text-calm hover:underline"
             >
-              Open cybercrime.gov.in
+              Open official filing portal
               <ExternalLink size={14} aria-hidden="true" />
             </a>
           </div>

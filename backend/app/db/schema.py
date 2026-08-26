@@ -13,12 +13,23 @@ from app.db.base import Base
 
 PG_ENUM_VALUES: dict[str, tuple[str, ...]] = {
     "incident_type_enum": (
+        "women_children",
         "financial_fraud",
+        "other_cyber_crime",
         "phishing",
         "identity_theft",
         "social_media",
         "job_scam",
         "other",
+    ),
+    "other_crime_sub_category_enum": (
+        "online_social_media",
+        "ransomware",
+        "hacking",
+        "cryptocurrency",
+        "online_trafficking",
+        "online_gambling",
+        "any_other",
     ),
     "payment_method_enum": (
         "upi",
@@ -44,7 +55,25 @@ NEW_COLUMNS: tuple[tuple[str, str, str], ...] = (
     # (name, postgres type, sqlite type)
     ("occurred_at", "TIMESTAMP WITH TIME ZONE", "TIMESTAMP"),
     ("transaction_id", "VARCHAR(128)", "VARCHAR(128)"),
+    (
+        "other_crime_sub_category",
+        "other_crime_sub_category_enum",
+        "VARCHAR(64)",
+    ),
+    ("details", "JSONB", "JSON"),
     ("urgency_computed_at", "TIMESTAMP WITH TIME ZONE", "TIMESTAMP"),
+    ("incident_subtype", "VARCHAR(128)", "VARCHAR(128)"),
+    ("affected_person_type", "VARCHAR(64)", "VARCHAR(64)"),
+    ("platform", "VARCHAR(64)", "VARCHAR(64)"),
+    ("account_type", "VARCHAR(64)", "VARCHAR(64)"),
+    ("immediate_danger", "BOOLEAN", "BOOLEAN"),
+    ("threat_or_blackmail", "BOOLEAN", "BOOLEAN"),
+    ("content_still_online", "BOOLEAN", "BOOLEAN"),
+    ("account_access", "VARCHAR(32)", "VARCHAR(32)"),
+    ("attacker_active", "BOOLEAN", "BOOLEAN"),
+    ("sensitive_information_exposed", "BOOLEAN", "BOOLEAN"),
+    ("evidence_types", "JSONB", "JSON"),
+    ("urgency_score", "INTEGER", "INTEGER"),
 )
 
 
@@ -60,6 +89,15 @@ def ensure_schema(engine: Engine) -> None:
 
     if dialect == "postgresql":
         with engine.connect().execution_options(isolation_level="AUTOCOMMIT") as conn:
+            conn.execute(
+                text(
+                    "DO $$ BEGIN "
+                    "CREATE TYPE other_crime_sub_category_enum AS ENUM "
+                    "('online_social_media', 'ransomware', 'hacking', 'cryptocurrency', "
+                    "'online_trafficking', 'online_gambling', 'any_other'); "
+                    "EXCEPTION WHEN duplicate_object THEN NULL; END $$;"
+                )
+            )
             for enum_name, values in PG_ENUM_VALUES.items():
                 for value in values:
                     conn.execute(
