@@ -5,6 +5,9 @@
 @layer base {
   :root {
     color-scheme: light;
+    --font-display: Georgia, serif;
+    --font-sans: system-ui, sans-serif;
+    --font-mono: ui-monospace, monospace;
   }
 
   html {
