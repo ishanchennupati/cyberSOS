@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, Suspense } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 
 import { ErrorState } from "@/components/error-state";
@@ -16,7 +16,7 @@ import { GuidedCrimeQuestions, guidedQuestionLabels, type GuidedCrimeDetails } f
 import { StepSituation, type SituationId } from "@/components/steps/step-situation";
 import { StepTransactionId } from "@/components/steps/step-transaction-id";
 import { StepWhen } from "@/components/steps/step-when";
-import { createIncident, triageIncident, uploadEvidence, ApiError } from "@/lib/api";
+import { createIncident, triageIncident, getIncident, uploadEvidence, ApiError } from "@/lib/api";
 import { parseAmountInput } from "@/lib/format";
 import {
   fromDateTimeLocalValue,
@@ -43,6 +43,7 @@ const FINANCIAL_STEPS = [
 type FlowState = {
   category: TopLevelCrimeCategory | null;
   situation: SituationId | null;
+  situationDescription?: string;
   incidentId: string | null;
   incidentType: IncidentType | null;
   otherSubCategory: OtherCrimeSubCategory | null;
@@ -60,6 +61,7 @@ type FlowState = {
 const INITIAL_STATE: FlowState = {
   category: null,
   situation: null,
+  situationDescription: "",
   incidentId: null,
   incidentType: null,
   otherSubCategory: null,
@@ -74,13 +76,71 @@ const INITIAL_STATE: FlowState = {
   evidenceFiles: [],
 };
 
-export default function IncidentStartPage() {
+function IncidentStartFlow() {
   const router = useRouter();
-  const [step, setStep] = useState(0);
+  const searchParams = useSearchParams();
+  const editId = searchParams.get("id");
+
+  // If we're editing an existing incident, skip the category picker (step 0)
+  // and land directly on the financial sub-flow, whose first step is 1.
+  const [step, setStep] = useState(editId ? 1 : 0);
   const [guidedIndex, setGuidedIndex] = useState(0);
   const [flow, setFlow] = useState<FlowState>(INITIAL_STATE);
   const [errorMessage, setErrorMessage] = useState("");
   const [busy, setBusy] = useState(false);
+
+  // Load state from sessionStorage or API
+  useEffect(() => {
+    if (!editId) return;
+    const id = editId;
+
+    async function load() {
+      setBusy(true);
+      try {
+        const cached = sessionStorage.getItem(`cybersos_flow_${id}`);
+        if (cached) {
+          const parsed = JSON.parse(cached) as FlowState;
+          setFlow(parsed);
+          return;
+        }
+
+        const incident = await getIncident(id);
+
+        // Infer a sensible default situation
+        let inferredSituation: SituationId = "money_taken";
+        if (incident.incident_type !== "financial_fraud") {
+          inferredSituation = "other_cybercrime";
+        }
+
+        setFlow((prev) => ({
+          ...prev,
+          category: "financial_fraud",
+          situation: inferredSituation,
+          situationDescription: "",
+          incidentId: incident.id,
+          incidentType: incident.incident_type,
+          timePreset: "exact",
+          exactValue: incident.occurred_at ? toDateTimeLocalValue(new Date(incident.occurred_at)) : "",
+          amount: incident.amount !== null ? String(incident.amount) : "",
+          paymentMethod: incident.payment_method,
+          transactionId: incident.transaction_id || "",
+        }));
+      } catch (err) {
+        setErrorMessage("Failed to load your incident details.");
+      } finally {
+        setBusy(false);
+      }
+    }
+
+    void load();
+  }, [editId]);
+
+  // Save state to sessionStorage when it changes
+  useEffect(() => {
+    if (flow.incidentId) {
+      sessionStorage.setItem(`cybersos_flow_${flow.incidentId}`, JSON.stringify(flow));
+    }
+  }, [flow]);
 
   const isFinancial = flow.category === "financial_fraud";
   const isOther = flow.category === "other_cyber_crime";
@@ -312,7 +372,12 @@ export default function IncidentStartPage() {
             />
           )}
           {isFinancial && step === 1 && (
-            <StepSituation value={flow.situation} onChange={(value) => update("situation", value)} />
+            <StepSituation
+              value={flow.situation}
+              onChange={(value) => update("situation", value)}
+              description={flow.situationDescription || ""}
+              onDescriptionChange={(value) => update("situationDescription", value)}
+            />
           )}
           {isFinancial && step === 2 && (
             <StepIncidentType value={flow.incidentType} onChange={(value) => update("incidentType", value)} />
@@ -370,5 +435,17 @@ export default function IncidentStartPage() {
         </div>
       </div>
     </main>
+  );
+}
+
+export default function IncidentStartPage() {
+  return (
+    <Suspense fallback={
+      <main className="min-h-screen bg-paper flex items-center justify-center">
+        <LoadingState message="Loading..." />
+      </main>
+    }>
+      <IncidentStartFlow />
+    </Suspense>
   );
 }
