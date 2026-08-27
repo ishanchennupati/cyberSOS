@@ -74,6 +74,22 @@ NEW_COLUMNS: tuple[tuple[str, str, str], ...] = (
     ("sensitive_information_exposed", "BOOLEAN", "BOOLEAN"),
     ("evidence_types", "JSONB", "JSON"),
     ("urgency_score", "INTEGER", "INTEGER"),
+    ("transaction_status", "VARCHAR(32)", "VARCHAR(32)"),
+    ("is_fraud_ongoing", "BOOLEAN", "BOOLEAN"),
+    ("is_account_compromised", "BOOLEAN", "BOOLEAN"),
+    ("is_credentials_exposed", "BOOLEAN", "BOOLEAN"),
+    ("is_otp_shared", "BOOLEAN", "BOOLEAN"),
+    ("is_pin_shared", "BOOLEAN", "BOOLEAN"),
+    ("is_password_shared", "BOOLEAN", "BOOLEAN"),
+    ("is_remote_access_granted", "BOOLEAN", "BOOLEAN"),
+    ("unauthorized_activity_continuing", "BOOLEAN", "BOOLEAN"),
+    ("potential_additional_loss", "BOOLEAN", "BOOLEAN"),
+    ("account_secured", "BOOLEAN", "BOOLEAN"),
+    ("evidence_available", "BOOLEAN", "BOOLEAN"),
+    ("severity", "VARCHAR(32)", "VARCHAR(32)"),
+    ("ongoing_risk", "VARCHAR(32)", "VARCHAR(32)"),
+    ("recovery_window", "VARCHAR(32)", "VARCHAR(32)"),
+    ("urgency_reasons", "JSONB", "JSON"),
 )
 
 

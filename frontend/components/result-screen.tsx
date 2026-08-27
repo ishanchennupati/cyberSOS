@@ -229,6 +229,21 @@ export function ResultScreen({ plan, incidentId }: ResultScreenProps) {
         )}
       </div>
 
+      <div className="mt-10 rounded-lg border-2 border-calm bg-calm-soft px-6 py-8 sm:px-8">
+        <p className="font-mono text-xs uppercase tracking-widest text-calm">Next step</p>
+        <h2 className="mt-2 font-display text-2xl text-ink">Add your evidence</h2>
+        <p className="mt-2 max-w-xl text-[15px] leading-relaxed text-ink-muted">
+          Screenshots, receipts, messages, and suspect details — organized in one place before you
+          file. Nothing is submitted anywhere on your behalf.
+        </p>
+        <Link href={`/incident/${incidentId}/evidence`}>
+          <Button variant="calm" size="lg" className="mt-6 w-full sm:w-auto">
+            <FileText size={18} aria-hidden="true" />
+            Go to evidence vault
+          </Button>
+        </Link>
+      </div>
+
       <div className="mt-8 flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
         <Link href={`/incident/start?id=${incidentId}`} className="text-sm font-medium text-calm underline-offset-2 hover:underline">
           Go back to edit your answers

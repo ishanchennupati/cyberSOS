@@ -4,6 +4,8 @@ import { OptionCard } from "@/components/option-card";
 import { cn } from "@/lib/utils";
 
 export const SITUATION_OPTIONS = [
+  // Safety-sensitive category
+  { id: "women_children", label: "Women/Children related cyber crime" },
   // Financial / Payment Related
   { id: "money_taken", label: "Money was taken from my account" },
   { id: "tricked_into_sending", label: "I was tricked into sending money" },
@@ -32,6 +34,7 @@ export function StepSituation({
 }: StepSituationProps) {
   const financialOptionIds = ["money_taken", "tricked_into_sending", "account_accessed"];
   const otherOptionIds = ["account_hacked", "suspicious_message", "other_cybercrime", "not_sure"];
+  const safetyOptionIds = ["women_children"];
 
   const isOtherSelected = value !== null && otherOptionIds.includes(value);
   const [showOther, setShowOther] = useState(isOtherSelected);
@@ -50,6 +53,7 @@ export function StepSituation({
   const otherOptions = SITUATION_OPTIONS.filter((opt) =>
     otherOptionIds.includes(opt.id)
   );
+  const safetyOptions = SITUATION_OPTIONS.filter((opt) => safetyOptionIds.includes(opt.id));
 
   return (
     <div>
@@ -76,6 +80,17 @@ export function StepSituation({
               }}
               label={option.label}
             />
+          ))}
+        </div>
+      </div>
+
+      <div className="mt-6">
+        <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-ink-muted">
+          Safety-sensitive reports
+        </h3>
+        <div role="radiogroup" aria-label="Safety-sensitive reports" className="flex flex-col gap-3">
+          {safetyOptions.map((option) => (
+            <OptionCard key={option.id} selected={value === option.id} onSelect={() => { onChange(option.id); setShowOther(false); }} label={option.label} />
           ))}
         </div>
       </div>

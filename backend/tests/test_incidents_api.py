@@ -151,6 +151,16 @@ def test_triage_rejects_zero_amount(client: TestClient) -> None:
     assert response.status_code == 422
 
 
+def test_triage_rejects_amount_above_database_limit(client: TestClient) -> None:
+    incident_id = _create(client)
+    response = client.post(
+        f"/api/v1/incidents/{incident_id}/triage",
+        json=_triage_body(amount=10_000_000_000),
+    )
+    assert response.status_code == 422
+    assert "less than or equal to 9999999999.99" in response.text
+
+
 def test_triage_missing_incident(client: TestClient) -> None:
     response = client.post(
         "/api/v1/incidents/00000000-0000-0000-0000-000000000000/triage",

@@ -11,10 +11,12 @@ import { LoadingState } from "@/components/loading-state";
 import { ProgressSteps } from "@/components/progress-steps";
 import { StepAmount } from "@/components/steps/step-amount";
 import { StepIncidentType } from "@/components/steps/step-incident-type";
+import { StepOtherCrimeDetails, type OtherCrimeDetails } from "@/components/steps/step-other-crime-details";
 import { StepSituation, type SituationId } from "@/components/steps/step-situation";
 import { StepTransactionId } from "@/components/steps/step-transaction-id";
 import { StepWhen } from "@/components/steps/step-when";
-import { createIncident, triageIncident, getIncident, ApiError } from "@/lib/api";
+import { GuidedCrimeQuestions, type GuidedCrimeDetails } from "@/components/steps/guided-crime-questions";
+import { createIncident, triageIncident, getIncident, uploadEvidence, ApiError } from "@/lib/api";
 import { parseAmountInput } from "@/lib/format";
 import {
   fromDateTimeLocalValue,
@@ -22,7 +24,9 @@ import {
   toDateTimeLocalValue,
   type TimePreset,
 } from "@/lib/time-presets";
-import type { IncidentType, PaymentMethod } from "@/types/incident";
+import type { IncidentType, OtherCrimeSubCategory, PaymentMethod } from "@/types/incident";
+
+const MAX_INCIDENT_AMOUNT = 9_999_999_999.99;
 
 const STEPS = [
   { label: "What happened" },
@@ -44,6 +48,10 @@ type FlowState = {
   transactionId: string;
   transactionStatus: "unknown" | "pending" | "completed";
   ongoingRisk: boolean;
+  otherCrimeSubCategory: OtherCrimeSubCategory | null;
+  otherCrimeDetails: OtherCrimeDetails;
+  womenChildrenDetails: GuidedCrimeDetails;
+  evidenceFiles: File[];
 };
 
 const INITIAL_STATE: FlowState = {
@@ -58,6 +66,10 @@ const INITIAL_STATE: FlowState = {
   transactionId: "",
   transactionStatus: "unknown",
   ongoingRisk: false,
+  otherCrimeSubCategory: null,
+  otherCrimeDetails: {},
+  womenChildrenDetails: {},
+  evidenceFiles: [],
 };
 
 function IncidentStartFlow() {
@@ -108,6 +120,12 @@ function IncidentStartFlow() {
               ? incident.transaction_status
               : "unknown",
           ongoingRisk: Boolean(incident.unauthorized_activity_continuing),
+          otherCrimeSubCategory: incident.other_crime_sub_category,
+          otherCrimeDetails: (incident.details ?? {}) as OtherCrimeDetails,
+          womenChildrenDetails: incident.incident_type === "women_children"
+            ? ((incident.details ?? {}) as GuidedCrimeDetails)
+            : {},
+          evidenceFiles: [],
         });
       } catch (err) {
         setErrorMessage("Failed to load your incident details.");
@@ -141,6 +159,49 @@ function IncidentStartFlow() {
     return null;
   }
 
+  function resolvedWomenOccurredAt(): Date | null {
+    const label = String(flow.womenChildrenDetails.incident_time ?? "");
+    const days: Record<string, number> = {
+      "Just now": 0,
+      "Within the last 24 hours": 1,
+      "Within the last week": 3,
+      "Within the last month": 14,
+      "More than a month ago": 60,
+    };
+    return label in days ? new Date(Date.now() - days[label] * 24 * 60 * 60 * 1000) : null;
+  }
+
+  async function finishWomenChildren() {
+    const details = flow.womenChildrenDetails;
+    const occurred = resolvedWomenOccurredAt();
+    if (!occurred || !String(details.incident_subtype ?? "")) {
+      setErrorMessage("Some safety details are missing. Please go back and check each step.");
+      return;
+    }
+    setBusy(true);
+    try {
+      const incident = flow.incidentId ? await getIncident(flow.incidentId) : await createIncident({ incident_type: "women_children", payment_method: "unknown" });
+      if (!flow.incidentId) setFlow((prev) => ({ ...prev, incidentId: incident.id }));
+      await triageIncident(incident.id, {
+        incident_type: "women_children",
+        incident_subtype: String(details.incident_subtype),
+        occurred_at: occurred.toISOString(),
+        payment_method: "unknown",
+        affected_person_type: String(details.affected_person_type ?? "") || null,
+        immediate_danger: details.immediate_danger === "Yes",
+        threat_or_blackmail: details.threat_or_blackmail === "Yes",
+        content_still_online: details.content_still_online === "Yes",
+        evidence_types: Array.isArray(details.evidence_types) ? details.evidence_types : [],
+        details,
+      });
+      await Promise.all(flow.evidenceFiles.map((file) => uploadEvidence(incident.id, file)));
+      router.push(`/incident/${incident.id}/result`);
+    } catch (err) {
+      setErrorMessage(err instanceof ApiError ? err.message : "Something went wrong. Please try again.");
+      setBusy(false);
+    }
+  }
+
   function validateStep(current: number): string | null {
     if (current === 1 && !flow.situation) {
       return "Please choose the option that best matches what happened.";
@@ -151,6 +212,12 @@ function IncidentStartFlow() {
       }
     }
     if (current === 3) {
+      if (flow.incidentType === "other_cyber_crime") {
+        if (!flow.otherCrimeSubCategory) {
+          return "Please select the type of other cyber crime.";
+        }
+        return null;
+      }
       if (!flow.timePreset) {
         return "Please tell us when this happened — it decides how urgently you need to act.";
       }
@@ -163,9 +230,23 @@ function IncidentStartFlow() {
       }
     }
     if (current === 4) {
+      if (flow.incidentType === "other_cyber_crime") {
+        if (!flow.timePreset) {
+          return "Please tell us when this happened — it decides how urgently you need to act.";
+        }
+        const occurred = resolvedOccurredAt();
+        if (!occurred) return "Please enter the date and time of the incident.";
+        if (occurred.getTime() > Date.now() + 60 * 1000) {
+          return "That time is in the future. Please check the date and time.";
+        }
+        return null;
+      }
       const amount = parseAmountInput(flow.amount);
       if (amount === null || amount <= 0) {
         return "Please enter the amount that left your account.";
+      }
+      if (amount > MAX_INCIDENT_AMOUNT) {
+        return "Please enter an amount of 9,999,999,999.99 or less.";
       }
       if (!flow.paymentMethod) {
         return "Please select how the payment was made.";
@@ -190,7 +271,7 @@ function IncidentStartFlow() {
       setBusy(true);
       try {
         const incident = await createIncident({
-          incident_type: "financial_fraud",
+          incident_type: flow.situation === "women_children" ? "women_children" : "financial_fraud",
           payment_method: "unknown",
         });
         setFlow((prev) => ({ ...prev, incidentId: incident.id }));
@@ -206,13 +287,15 @@ function IncidentStartFlow() {
     }
 
     if (step < 5) {
+      if (step === 2 && flow.situation === "women_children") return;
       setStep(step + 1);
       return;
     }
 
     const occurred = resolvedOccurredAt();
     const amount = parseAmountInput(flow.amount);
-    if (!flow.incidentId || !flow.incidentType || !occurred || amount === null || !flow.paymentMethod) {
+    const isOtherCrime = flow.incidentType === "other_cyber_crime";
+    if (!flow.incidentId || !flow.incidentType || !occurred || (!isOtherCrime && (amount === null || !flow.paymentMethod))) {
       setErrorMessage("Some details are missing. Please go back and check each step.");
       return;
     }
@@ -222,9 +305,13 @@ function IncidentStartFlow() {
       await triageIncident(flow.incidentId, {
         incident_type: flow.incidentType,
         occurred_at: occurred.toISOString(),
-        amount,
-        payment_method: flow.paymentMethod,
+        amount: isOtherCrime ? null : amount,
+        payment_method: isOtherCrime ? "unknown" : flow.paymentMethod!,
         transaction_id: flow.transactionId.trim() ? flow.transactionId.trim() : null,
+        other_crime_sub_category: isOtherCrime ? flow.otherCrimeSubCategory : null,
+        details: isOtherCrime
+          ? { ...flow.otherCrimeDetails, situation_description: flow.situationDescription || undefined }
+          : null,
         transaction_status: flow.transactionStatus,
         unauthorized_activity_continuing: flow.ongoingRisk,
         potential_additional_loss: flow.ongoingRisk,
@@ -269,13 +356,30 @@ function IncidentStartFlow() {
             />
           )}
           {step === 2 && (
-            <StepIncidentType
-              value={flow.incidentType}
-              onChange={(value) => update("incidentType", value)}
-            />
+            flow.situation === "women_children" ? (
+              <GuidedCrimeQuestions
+                category="women_children"
+                subCategory={null}
+                details={flow.womenChildrenDetails}
+                evidenceFiles={flow.evidenceFiles}
+                onSubCategoryChange={() => undefined}
+                onDetailsChange={(value) => update("womenChildrenDetails", value)}
+                onEvidenceFilesChange={(value) => update("evidenceFiles", value)}
+                onComplete={() => { void finishWomenChildren(); }}
+              />
+            ) : <StepIncidentType value={flow.incidentType} onChange={(value) => update("incidentType", value)} />
           )}
           {step === 3 && (
-            <StepWhen
+            flow.incidentType === "other_cyber_crime" ? (
+              <StepOtherCrimeDetails
+                subCategory={flow.otherCrimeSubCategory}
+                details={flow.otherCrimeDetails}
+                onSubCategoryChange={(value) => update("otherCrimeSubCategory", value)}
+                onDetailsChange={(value) => update("otherCrimeDetails", value)}
+                evidenceFiles={flow.evidenceFiles}
+                onEvidenceFilesChange={(value) => update("evidenceFiles", value)}
+              />
+            ) : <StepWhen
               preset={flow.timePreset}
               exactValue={flow.exactValue}
               onPreset={(preset) => {
@@ -301,7 +405,21 @@ function IncidentStartFlow() {
             />
           )}
           {step === 4 && (
-            <StepAmount
+            flow.incidentType === "other_cyber_crime" ? <StepWhen
+              preset={flow.timePreset}
+              exactValue={flow.exactValue}
+              onPreset={(preset) => {
+                const nextExact = preset === "exact"
+                  ? flow.exactValue || toDateTimeLocalValue(new Date())
+                  : toDateTimeLocalValue(occurredAtFromPreset(preset));
+                setFlow((prev) => ({ ...prev, timePreset: preset, exactValue: nextExact }));
+                setErrorMessage("");
+              }}
+              onExactChange={(value) => {
+                setFlow((prev) => ({ ...prev, timePreset: "exact", exactValue: value }));
+                setErrorMessage("");
+              }}
+            /> : <StepAmount
               amount={flow.amount}
               paymentMethod={flow.paymentMethod}
               onAmountChange={(value) => update("amount", value)}
@@ -340,12 +458,14 @@ function IncidentStartFlow() {
             </div>
           )}
 
-          <FlowNav
-            onBack={step > 1 ? handleBack : undefined}
-            onNext={handleNext}
-            nextLabel={step === 5 ? "See what to do now" : "Continue"}
-            busy={busy}
-          />
+          {!(step === 2 && flow.situation === "women_children") && (
+            <FlowNav
+              onBack={step > 1 ? handleBack : undefined}
+              onNext={handleNext}
+              nextLabel={step === 5 ? "See what to do now" : "Continue"}
+              busy={busy}
+            />
+          )}
         </div>
       </div>
     </main>

@@ -11,6 +11,8 @@ from app.models.incident import (
     Urgency,
 )
 
+MAX_INCIDENT_AMOUNT = 9_999_999_999.99
+
 
 def validate_other_crime_details(
     sub_category: OtherCrimeSubCategory | None,
@@ -74,7 +76,7 @@ class IncidentCreate(BaseModel):
     evidence_types: list[str] | None = None
     other_crime_sub_category: OtherCrimeSubCategory | None = None
     payment_method: PaymentMethod = PaymentMethod.unknown
-    amount: float | None = Field(default=None, ge=0)
+    amount: float | None = Field(default=None, ge=0, le=MAX_INCIDENT_AMOUNT)
     incident_time: datetime | None = None
     details: dict[str, object] | None = None
 
@@ -154,7 +156,7 @@ class TriageRequest(BaseModel):
     sensitive_information_exposed: bool | None = None
     evidence_types: list[str] | None = None
     occurred_at: datetime
-    amount: float | None = Field(default=None, ge=0)
+    amount: float | None = Field(default=None, ge=0, le=MAX_INCIDENT_AMOUNT)
     payment_method: PaymentMethod = PaymentMethod.unknown
     transaction_id: str | None = Field(default=None, max_length=128)
     transaction_status: str | None = None

@@ -6,7 +6,8 @@ export type IncidentType =
   | "identity_theft"
   | "social_media"
   | "job_scam"
-  | "other";
+  | "other"
+  | "other_cyber_crime";
 
 export type TopLevelCrimeCategory =
   | "women_children"
@@ -103,6 +104,7 @@ export interface Incident {
   occurred_at: string | null;
   transaction_id: string | null;
   transaction_status: string | null;
+  description: string | null;
   is_account_compromised: boolean | null;
   is_credentials_exposed: boolean | null;
   is_otp_shared: boolean | null;
@@ -206,8 +208,8 @@ export const INCIDENT_TYPE_OPTIONS: {
     enabled: true,
   },
   {
-    id: "other",
-    label: "Something else",
+    id: "other_cyber_crime",
+    label: "Other cyber crime",
     description: "Another kind of cyber incident.",
     enabled: true,
   },
