@@ -75,6 +75,7 @@ message/voice/upload → validated candidate facts → conversation state → de
 6. Keep local work deterministic. Missing optional cloud/AI credentials must not prevent startup or relevant tests. Use isolated test databases, temporary storage, provider doubles, and a manual correction path when extraction fails. Never fake successful extraction or saving.
 7. Be economical. Use targeted rg searches and batch independent reads. Reuse established findings, avoid unnecessary abstractions, and expand checks when evidence justifies it. Accuracy and completion take precedence over token saving.
 8. Finish authorized work. Implement and verify the requested scope, rather than stopping at a proposed fix. Do not overwrite unrelated user changes or push, deploy, or destructively alter data without authorization.
+9. Branch control. Work on the current branch by default. Do not create branches or worktrees, switch branches, commit, merge or push unless the user explicitly instructs that action. A phase name alone does not authorize a branch change.
 
 ## Verification before completion
 
