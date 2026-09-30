@@ -2,7 +2,7 @@ import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, Enum, ForeignKey, JSON, Numeric, String, Uuid, func
+from sqlalchemy import DateTime, Enum, JSON, Numeric, String, Uuid, func
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -96,6 +96,17 @@ class Incident(Base):
     )
 
     transaction_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    bank: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    wallet: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    merchant: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    description: Mapped[str | None] = mapped_column(String(4000), nullable=True)
+    playbook_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    playbook_version: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    fact_schema_version: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    facts: Mapped[dict | None] = mapped_column(JSON().with_variant(JSONB, "postgresql"), nullable=True)
+    plan_revision: Mapped[int] = mapped_column(default=0, server_default="0", nullable=False)
+    case_secret_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    case_secret_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     transaction_status: Mapped[str | None] = mapped_column(String(32), nullable=True)
     is_fraud_ongoing: Mapped[bool | None] = mapped_column(nullable=True)
     is_account_compromised: Mapped[bool | None] = mapped_column(nullable=True)
@@ -156,27 +167,13 @@ class Incident(Base):
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
 
+    @property
+    def authorization(self) -> str:
+        return self.facts.get("authorization", "unknown") if self.facts else "unknown"
+
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
         onupdate=func.now(),
         nullable=False,
-    )
-
-
-class Evidence(Base):
-    __tablename__ = "evidence"
-
-    id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
-    incident_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("incidents.id", ondelete="CASCADE"), nullable=False, index=True
-    )
-    original_filename: Mapped[str] = mapped_column(String(255), nullable=False)
-    stored_filename: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
-    content_type: Mapped[str | None] = mapped_column(String(128), nullable=True)
-    size_bytes: Mapped[int] = mapped_column(nullable=False)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
     )

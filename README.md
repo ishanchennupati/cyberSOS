@@ -1,327 +1,196 @@
 # CyberSOS
 
-CyberSOS is an independent prototype that helps people in India respond to a
-cyber or financial fraud incident. It guides a person through the facts of an
-incident, highlights urgency, suggests immediate actions, preserves evidence
-metadata, and prepares a complaint draft for the official reporting channels.
+CyberSOS is an independent cyber-incident support prototype for India. It prepares
+information and points users to external reporting channels. It is not a bank,
+police service, government service, legal-advice service or fund-recovery service.
+It cannot predict recovery, refunds, FIR eligibility or official response times.
 
-CyberSOS does **not** replace the Government of India's Cyber Crime Reporting
-Portal or the 1930 helpline. It does not submit a complaint on the user's
-behalf and it is not affiliated with either service.
+Use synthetic data for local development. Private cases now require a case capability; UUID URLs alone do not authorize
+access. Retention policy, returning-user authentication and account recovery are
+not implemented. Continue using synthetic data; this is not ready for real data.
 
-## What the application does
+## CURRENTLY WORKING
 
-The current guided flow supports three top-level categories:
+- Existing structured guided intake: financial fraud, other cyber crime and
+  women/children categories. These are limited existing flows, not comprehensive
+  response playbooks or conversational intake.
+- Incident create/read and typed, versioned financial response playbooks for
+  approved scam payments, unauthorized transactions and unknown authorization.
+  Immutable plan revisions, source snapshots and user-owned action completion.
+  Existing category validation, complaint drafts, description and template summary.
+- Evidence upload/reject/list/view/update/delete, original filename/private path,
+  MIME/type, size, SHA-256, description, extraction/verification and timestamps.
+- Local text heuristic extraction where supported; explicit extraction failure
+  and manual correction for unsupported content/provider failure. No local OCR.
+- Suspect identifiers, timeline events and evidence-readiness display.
+- Single Evidence ORM and mounted frontend API contracts; HTTP 204 delete and
+  backend-origin preview handling.
+- Tracked Alembic fresh/legacy schema migrations, isolated SQLite tests and
+  synthetic browser smoke. PostgreSQL is supported in configuration/DDL but
+  PostgreSQL execution has not been verified in this environment.
 
-- **UPI / financial fraud**: situation, incident type, time, amount, payment
-  method, UTR/transaction ID, and optional evidence
-- **Other cyber crime**: social media crime, ransomware, hacking,
-  cryptocurrency crime, online trafficking, online gambling, and other crime
-- **Women/children related cyber crime**: safety, threats or blackmail,
-  affected person, platform, account access, online content, and evidence
+Urgency is a product heuristic based on recency and ongoing-risk facts. Reporting amount, transaction ID and uploads do not gate protective actions.
+Financial action selection is centralized in app/domain/playbooks.py. Recovery
+fields are absent from active HTTP contracts; old database columns remain only
+to preserve historical data.
 
-When the flow is submitted, the backend:
+## OPTIONAL PROVIDER-DEPENDENT
 
-1. Creates an incident record.
-2. Validates category-specific fields.
-3. Computes an urgency level and score during triage.
-4. Builds an ordered action plan, including 1930 and cybercrime.gov.in where
-   appropriate.
-5. Generates a complaint draft from the structured incident data.
-6. Stores uploaded evidence files locally and records their metadata.
+Supabase private storage and existing Anthropic extraction/summary adapters are
+opt-in. Their SDKs are not included in baseline requirements; configuration alone
+does not establish provider availability. Live providers are not verified. Missing
+credentials permit local storage, heuristic extraction/manual correction and
+template summary fallback. Gemini is intended for future explicitly scoped work;
+it is not integrated. AI does not control current deterministic action selection.
+See [backend/.env.example](backend/.env.example) for every available setting.
 
-The urgency engine is deterministic. For financial fraud it considers how long
-ago the incident occurred and whether the amount is at least INR 100,000. The
-other categories use explicit safety, exposure, threat, and attacker-activity
-signals. This is product logic, not legal or financial advice.
+## PLANNED / NOT YET IMPLEMENTED
 
-## Architecture
+Conversational/voice intake, conversation-state controller, broader cybercrime
+playbooks, Gemini, multilingual support, retention policy, account authentication
+and returning-user recovery are not implemented. Phase 1 provides the financial
+domain foundation; Phase 2 has not started. See [roadmap](docs/roadmap.md).
 
-```text
-┌─────────────────────┐     HTTP/JSON      ┌─────────────────────┐     SQL      ┌──────────────┐
-│ Next.js frontend    │ ─────────────────▶ │ FastAPI backend     │ ──────────▶ │ PostgreSQL   │
-│ App Router          │ ◀───────────────── │ /api/v1             │ ◀────────── │ local/Supabase│
-└─────────────────────┘                   └─────────────────────┘              └──────────────┘
-                                                  │
-                                                  └── local evidence files
-```
+## NO REAL GOVERNMENT INTEGRATION
 
-The frontend and backend are separate applications. The frontend only talks
-to the backend over HTTP using `NEXT_PUBLIC_API_URL`; it does not access the
-database directly.
+CyberSOS does not submit complaints, call government APIs, receive official
+confirmations or track live police/bank/government progress. The user must review
+and submit reporting information independently. Keep any actual reference received
+from the official service; local records and synthetic demo tickets do not prove
+receipt. External links are handoffs. No recovery or response-time promise.
 
-### Frontend
+## Stack and local setup
 
-The frontend is Next.js 14 with the App Router, React, TypeScript, Tailwind
-CSS, and Lucide icons.
-
-- `frontend/app/page.tsx` is the landing page.
-- `frontend/app/incident/start/page.tsx` owns the guided incident flow and
-  its local form state.
-- `frontend/app/incident/[id]/result/page.tsx` loads and displays the action
-  plan.
-- `frontend/components/` contains reusable flow, status, result, and UI
-  components.
-- `frontend/components/steps/` contains the category-specific questions.
-- `frontend/lib/api.ts` is the only API client. It normalizes network,
-  timeout, and non-2xx failures into `ApiError` objects.
-- `frontend/types/incident.ts` contains TypeScript request and response types
-  corresponding to the backend schemas.
-
-Components handle presentation and simple interaction state. Persistence,
-validation, triage, urgency, action selection, and complaint generation live
-in the backend.
-
-### Backend
-
-The backend is FastAPI with Pydantic, SQLAlchemy, Alembic, Uvicorn, and the
-PostgreSQL driver.
-
-- `backend/app/main.py` creates the FastAPI app, configures CORS, mounts the
-  API router, and runs the startup schema compatibility check.
-- `backend/app/core/config.py` loads environment-based settings.
-- `backend/app/api/` contains versioned routers and thin route handlers.
-- `backend/app/schemas/` defines request validation and response models.
-- `backend/app/services/incident_service.py` contains incident creation,
-  triage, urgency scoring, action-plan construction, complaint drafting, and
-  evidence storage.
-- `backend/app/models/incident.py` defines the `Incident` and `Evidence` ORM
-  models and their enums.
-- `backend/app/db/` contains the SQLAlchemy base, engine/session setup, and
-  additive schema compatibility logic.
-
-Routes call services rather than implementing business rules themselves. This
-makes the deterministic rules replaceable later without changing the API
-shape or the frontend flow.
-
-### Database and files
-
-The database contains:
-
-- `incidents`: category, payment, amount, timestamps, transaction ID, guided
-  details, urgency, score, status, and audit timestamps
-- `evidence`: incident relationship, original filename, stored filename,
-  content type, size, and creation time
-
-The tracked Alembic revision is in
-`backend/alembic/versions/20260824_phase2.py`. On startup, `ensure_schema()`
-also creates a fresh schema and applies additive compatibility changes for
-older local databases. Evidence file bytes are stored below
-`EVIDENCE_STORAGE_DIR` (default `./evidence`) and are limited to 10 MiB per
-upload. Production deployments should use durable object storage instead.
-
-For a separate product description and architecture notes, see
-[`docs/product.md`](docs/product.md) and
-[`docs/architecture.md`](docs/architecture.md).
-
-## Repository layout
-
-```text
-cybersos/
-├── backend/
-│   ├── app/
-│   │   ├── api/             # FastAPI routers
-│   │   ├── core/            # configuration
-│   │   ├── db/              # engine, sessions, schema compatibility
-│   │   ├── models/          # SQLAlchemy ORM models
-│   │   ├── schemas/         # Pydantic contracts
-│   │   └── services/        # business logic
-│   ├── alembic/             # database migrations
-│   ├── tests/               # backend tests
-│   ├── .env.example
-│   └── requirements.txt
-├── frontend/
-│   ├── app/                 # Next.js routes and pages
-│   ├── components/          # reusable UI and flow steps
-│   ├── lib/                 # API client and frontend utilities
-│   ├── types/               # TypeScript domain types
-│   └── .env.example
-├── docs/
-└── README.md
-```
-
-## Setup on a new computer
-
-### Prerequisites
-
-- Git
-- Node.js 18.18 or newer and npm
-- Python 3.11 or newer
-- PostgreSQL 14 or newer, either installed locally or provided by a
-  [Supabase](https://supabase.com) project
-
-You need a database before starting the backend. Create a local database and
-user, or create a Supabase project and copy its PostgreSQL connection string.
-The connection string must be usable by `psycopg2`, for example:
-
-```text
-postgresql://cybersos:cybersos@localhost:5432/cybersos
-```
-
-### Windows PowerShell
-
-From the repository root:
+Next.js 14/React/TypeScript/Tailwind frontend; FastAPI/Pydantic/SQLAlchemy/Alembic
+backend. Python 3.11+ and Node 18.18+ match the repository's existing baseline.
+Run the following from the repository root in PowerShell for a new environment:
 
 ```powershell
-cd backend
-py -3.11 -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install --upgrade pip
-python -m pip install -r requirements.txt
-Copy-Item .env.example .env
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r backend/requirements.txt
 ```
 
-Open `backend/.env` and set `DATABASE_URL` to your database. The default
-`CORS_ORIGINS` already allows the local frontend. Then, still inside
-`backend`, apply the migration and start the API:
+Frontend setup, CWD frontend:
 
 ```powershell
-alembic upgrade head
-python -m uvicorn app.main:app --reload --port 8000
+npm ci
 ```
 
-In a second PowerShell terminal:
+Keep credentials in ignored local environment files. Copy the example only if
+no local file exists. DATABASE_URL is required; temporary SQLite works locally,
+so PostgreSQL/cloud credentials are not required for development verification.
+All settings are documented in backend/.env.example and frontend/.env.example.
+
+Backend start, CWD backend (set a synthetic local DB/storage directory):
 
 ```powershell
-cd frontend
-Copy-Item .env.example .env.local
-npm install
+$env:DATABASE_URL='sqlite:///./local.sqlite'
+$env:LOCAL_STORAGE_ROOT='./evidence'
+$env:CASE_COOKIE_SECURE='false' # HTTP localhost with synthetic data only
+..\.venv\Scripts\python.exe -m alembic upgrade head
+..\.venv\Scripts\python.exe -m uvicorn app.main:app --reload --port 8000
+```
+
+Frontend start in a second terminal, CWD frontend:
+
+```powershell
 npm run dev
 ```
 
-If PowerShell blocks activation, run this once in the current terminal and
-repeat the activation command:
+Default frontend http://localhost:3000; backend http://localhost:8000/health.
+Swagger http://localhost:8000/docs is authoritative for all mounted API methods,
+parameters and responses. NEXT_PUBLIC_API_URL defaults to http://localhost:8000;
+CORS_ORIGINS must allow the frontend origin. PostgreSQL connection strings may be
+used instead of SQLite; do not apply unverified upgrades to real data casually.
+
+## Migrations and verification
+
+Startup performs no DDL. Head is 20261001_response_foundation; the first baseline
+uses explicit historical DDL rather than create_all. Before an existing-schema
+upgrade, back up database and original evidence, set LOCAL_STORAGE_ROOT to the
+previous EVIDENCE_STORAGE_DIR and run alembic upgrade head from backend. Supports
+the audited legacy schema unversioned or stamped at either previous revision.
+Existing incident/evidence values, private paths and timestamps survive tested
+SQLite upgrades. Legacy hashes are backfilled only from available original bytes;
+missing MIME/hash remains null. Files are not moved. Consolidation is forward-only;
+rollback requires backup restore. No existing database was migrated during cleanup.
+
+Backend tests, CWD root:
 
 ```powershell
-Set-ExecutionPolicy -Scope Process -ExecutionPolicy RemoteSigned
+.\.venv\Scripts\python.exe -m pytest backend/tests -c backend/pytest.ini -q -p no:cacheprovider
 ```
 
-### macOS or Linux
+Tests create a session-private migrated SQLite DB, per-test temporary evidence,
+reset rows between tests and clean up. They never use shared ./test.db. Full suite
+includes fresh schema parity, all supported legacy upgrade cases, OpenAPI/API
+contracts, evidence/suspect/timeline CRUD and wording regressions.
 
-From the repository root:
+Frontend verification, CWD frontend:
 
-```bash
-cd backend
-python3 -m venv .venv
-source .venv/bin/activate
-python -m pip install --upgrade pip
-python -m pip install -r requirements.txt
-cp .env.example .env
-```
-
-Set `DATABASE_URL` in `backend/.env`, then start the backend:
-
-```bash
-alembic upgrade head
-python -m uvicorn app.main:app --reload --port 8000
-```
-
-In a second terminal:
-
-```bash
-cd frontend
-cp .env.example .env.local
-npm install
-npm run dev
-```
-
-### Local URLs
-
-- Frontend: <http://localhost:3000>
-- API liveness: <http://localhost:8000/health>
-- Swagger UI: <http://localhost:8000/docs>
-- ReDoc: <http://localhost:8000/redoc>
-
-The backend database check is available at
-<http://localhost:8000/api/v1/health/database>.
-
-## Configuration
-
-### Backend: `backend/.env`
-
-| Variable | Required | Default | Purpose |
-|---|---|---|---|
-| `DATABASE_URL` | Yes | None | PostgreSQL connection string |
-| `CORS_ORIGINS` | No | `http://localhost:3000,http://127.0.0.1:3000` | Comma-separated allowed frontend origins |
-| `SERVICE_NAME` | No | `cybersos-api` | Service name returned by `/health` |
-| `API_V1_PREFIX` | No | `/api/v1` | API version prefix |
-| `EVIDENCE_STORAGE_DIR` | No | `./evidence` | Directory for uploaded evidence files |
-
-### Frontend: `frontend/.env.local`
-
-| Variable | Required | Default | Purpose |
-|---|---|---|---|
-| `NEXT_PUBLIC_API_URL` | No | `http://localhost:8000` | Base URL of the FastAPI API |
-
-Never commit `.env`, `.env.local`, database credentials, or uploaded evidence.
-The example files are safe templates and are committed for setup guidance.
-
-## API reference
-
-All application routes are under `/api/v1`, except `/health`.
-
-| Method | Path | Purpose |
-|---|---|---|
-| GET | `/health` | API liveness |
-| GET | `/api/v1/health/database` | Check database reachability |
-| POST | `/api/v1/incidents` | Create a draft incident |
-| GET | `/api/v1/incidents/{incident_id}` | Read an incident |
-| POST | `/api/v1/incidents/{incident_id}/triage` | Validate details and compute urgency |
-| PATCH | `/api/v1/incidents/{incident_id}/details` | Update validated other-crime details |
-| POST | `/api/v1/incidents/{incident_id}/evidence` | Upload one evidence file as multipart form data |
-| GET | `/api/v1/incidents/{incident_id}/action-plan` | Return urgency, ordered actions, and complaint draft |
-
-FastAPI's interactive documentation at `/docs` is the authoritative view of
-request and response fields. Financial triage requires a positive amount and a
-known payment method. Other-crime payloads have additional conditional
-validation rules defined in `backend/app/schemas/incident.py`.
-
-## Development and verification
-
-Run backend tests from `backend` with the virtual environment activated:
-
-```bash
-pytest
-```
-
-The test fixture uses SQLite and a temporary schema, so PostgreSQL is not
-required to run the backend test suite. It covers incident CRUD, validation,
-triage, urgency decisions, action plans, complaint drafts, and evidence
-metadata/file persistence.
-
-For the frontend:
-
-```bash
+```powershell
+node --test __tests__/api-contract.test.cjs
 npm run lint
 npm run build
 ```
 
-Run those commands from `frontend`. `npm run dev` starts the development
-server; `npm run start` serves a previously built production bundle.
+Synthetic real-browser smoke requires the production build plus an existing
+Playwright driver/cached Chromium. Exact environment-specific tested invocation
+and manual smoke steps are in [verification.md](docs/verification.md).
+No live-provider/manual success is implied by local automation.
 
-## Current boundaries and future work
+## Canonical documentation
 
-Implemented today:
+- [Current product](docs/product.md), [architecture](docs/architecture.md)
+- [Action rules](docs/action-engine.md), [official sources](docs/official-sources.md)
+- [Roadmap/status](docs/roadmap.md), [phase evidence](docs/phase-status.md)
+- [Verification commands/results](docs/verification.md)
+- [Historical docs](docs/legacy/README.md): obsolete phase numbering/proposals
+- [Audit](docs/audit.md): historical findings plus resolution appendices
 
-- Guided financial-fraud, other-cyber-crime, and women/children flows
-- Deterministic urgency scoring and action plans
-- Complaint draft generation
-- PostgreSQL persistence and Alembic migration support
-- Local evidence uploads and metadata persistence
-- Health checks, API documentation, and backend tests
+## Private cases and Phase 1
 
-Not implemented yet:
+Case creation sets a per-case HttpOnly, SameSite Strict cookie; production Secure
+cookies default on. Use localhost for BOTH frontend and backend during development
+and set CASE_COOKIE_SECURE=false only for local HTTP. Requests include cookies;
+never copy a case secret into a URL, query, localStorage or a log. API clients may
+use X-Case-Secret in a header. Capabilities expire after seven days by default.
+Missing, expired and cross-case credentials receive 404 on every private resource,
+including original evidence. Clearing cookies loses local access.
 
-- Authentication, accounts, and incident history for returning users
-- AI-generated questions or complaint text
-- OCR or evidence-content analysis
-- Direct integrations with banks, UPI providers, 1930, or
-  `cybercrime.gov.in`
-- Automatic government complaint submission
-- Notifications and status callbacks
-- Multilingual support
-- Production object storage, retention policy, and deployment configuration
+The additive Phase 1 migration preserves old incidents/evidence, marks historical
+cases legacy_unversioned and leaves their capability unset. Those cases stay locked;
+there is no public claim/reset endpoint. Owner-verified administrative recovery is
+not implemented. Back up existing data; a UUID is never accepted as ownership.
 
-The project is intended as a citizen-support layer. Official reporting and
-emergency decisions remain the user's responsibility, with the official
-channels taking precedence over any CyberSOS output.
+Evidence policy rejects declared prohibited content and recognizable labelled
+credentials in text/metadata. It is a policy foundation, not image moderation or a
+guarantee that all sensitive content is detected. AI output cannot select critical
+actions. Completion means only the user says they acted, not official confirmation.
+See [architecture](docs/architecture.md), [sources](docs/official-sources.md) and
+[verification](docs/verification.md) for contracts, review limits and exact checks.
+
+## Code organization
+
+| Location | Responsibility |
+| --- | --- |
+| backend/app/domain | Typed facts, deterministic playbooks, sources and evidence policy |
+| backend/app/api/routes | HTTP validation, authorization and service calls |
+| backend/app/services/incident_service.py | Incident persistence, triage and versioned financial plan integration |
+| backend/app/services/incident_presentation.py | Complaint formatting and display labels |
+| backend/app/services/legacy_incident_service.py | Existing nonfinancial category responses |
+| backend/app/services | Case access, response snapshots, evidence/storage, summary, suspect and timeline operations |
+| backend/app/models / schemas | Database mappings / validated API contracts |
+| backend/alembic / tests | Tracked migrations / synthetic regression fixtures and tests |
+| frontend/app | Next.js routes and page rendering |
+| frontend/features/incident-intake | Existing guided intake state, validation and API orchestration |
+| frontend/components / lib / types | Reusable UI / API and utilities / TypeScript contracts |
+| docs | Current decisions, verification, phase evidence and labelled historical documents |
+
+This organization preserves the existing guided flow; it does not implement
+Phase 2 conversation features. Test matrices retain financial/access/migration
+coverage; duplicate legacy matrix assertions are combined rather than repeated.
+Default frontend builds still use .next. CYBERSOS_BUILD_DIR=.next-check permits
+isolated verification alongside a running development server; the check directory
+is ignored. Alternate smoke ports must match NEXT_PUBLIC_API_URL at build time.
+See the latest cleanup verification record for the exact commands.

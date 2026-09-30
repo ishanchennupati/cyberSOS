@@ -13,14 +13,13 @@ from datetime import datetime
 
 from app.core.config import get_settings
 from app.models.incident import Incident
-from app.services.incident_service import (
+from app.services.incident_presentation import (
     INCIDENT_TYPE_LABELS,
     PAYMENT_METHOD_LABELS,
     format_inr,
     format_occurred_at,
 )
 
-settings = get_settings()
 
 
 class SummaryProvider(ABC):
@@ -73,7 +72,8 @@ class AnthropicSummaryProvider(SummaryProvider):
     name = "anthropic"
 
     def generate(self, *, incident: Incident, user_description: str) -> str | None:
-        if not settings.ANTHROPIC_API_KEY:
+        settings = get_settings()
+        if not settings.ANTHROPIC_API_KEY or not settings.ANTHROPIC_MODEL:
             return None
         try:
             import anthropic
@@ -121,6 +121,7 @@ _PROVIDERS: dict[str, type[SummaryProvider]] = {
 
 
 def get_summary_provider() -> SummaryProvider:
+    settings = get_settings()
     provider_cls = _PROVIDERS.get(settings.SUMMARY_PROVIDER, TemplateSummaryProvider)
     return provider_cls()
 

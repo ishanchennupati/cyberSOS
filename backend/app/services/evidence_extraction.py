@@ -29,7 +29,6 @@ from app.core.config import get_settings
 from app.models.evidence import EvidenceType, ExtractionStatus
 from app.schemas.evidence import ExtractedFinancialData, ExtractionResult
 
-settings = get_settings()
 
 FIELDS = tuple(ExtractedFinancialData.model_fields.keys())
 
@@ -192,7 +191,8 @@ class AnthropicExtractionProvider(ExtractionProvider):
         filename: str,
         evidence_type: EvidenceType,
     ) -> ExtractedFinancialData | None:
-        if not settings.ANTHROPIC_API_KEY:
+        settings = get_settings()
+        if not settings.ANTHROPIC_API_KEY or not settings.ANTHROPIC_MODEL:
             return None
         if mime_type not in ("image/png", "image/jpeg", "application/pdf"):
             return None
@@ -247,6 +247,7 @@ _PROVIDERS: dict[str, type[ExtractionProvider]] = {
 
 
 def get_extraction_provider() -> ExtractionProvider:
+    settings = get_settings()
     provider_cls = _PROVIDERS.get(settings.EXTRACTION_PROVIDER, HeuristicExtractionProvider)
     return provider_cls()
 

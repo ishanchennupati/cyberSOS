@@ -7,6 +7,8 @@
 # Node / Next.js
 node_modules/
 .next/
+.next-check/
+.swc/
 out/
 next-env.d.ts
 npm-debug.log*
@@ -14,11 +16,40 @@ npm-debug.log*
 # Python
 __pycache__/
 *.pyc
+*.pyo
 .venv/
 venv/
 *.egg-info/
 backend/test.db
 backend/test.db-journal
+
+# Generated databases, build metadata and runtime evidence
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+*.sqlite-wal
+*.sqlite-shm
+*.sqlite3-wal
+*.sqlite3-shm
+*.tsbuildinfo
+.pytest_cache/
+**/.pytest_cache/
+/evidence/
+/backend/evidence/
+/uploads/
+/backend/uploads/
+/reports/generated/
+/tmp/
+/backend/tmp/
+*.log
+
+# Local environment variants; keep public setup templates
+.env.*
+**/.env.*
+!**/.env.example
 
 # OS
 .DS_Store

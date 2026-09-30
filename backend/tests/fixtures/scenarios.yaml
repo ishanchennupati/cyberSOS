@@ -1,0 +1,142 @@
+{
+  "0B_existing_journey": {
+    "scope": "Synthetic existing guided flow; preserves 0A playbook behavior. This is not official reporting.",
+    "amount": 2500,
+    "payment_method": "upi",
+    "description": "Synthetic smoke: a suspicious payment request.",
+    "transaction_id": "SYNTH000123",
+    "suspect_phone": "9999900000",
+    "timeline_description": "Synthetic call received",
+    "file_name": "synthetic-proof.png",
+    "png_base64": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=",
+    "expected": {
+      "upload_status": 201,
+      "extraction_status": "failed",
+      "verification_status": "verified",
+      "summary_provider": "template",
+      "delete_status": 204
+    }
+  },
+  "0C_response_truth": {
+    "recovery_window": null,
+    "amounts": [
+      100,
+      99999,
+      100000,
+      200000
+    ],
+    "ages_days": [
+      0,
+      2,
+      6,
+      30
+    ],
+    "amount_changes_reporting_actions": false,
+    "government_submission": false
+  },
+  "phase1_playbooks": [
+    {
+      "name": "recent authorized scam",
+      "facts": {
+        "kind": "financial_scam_transfer",
+        "occurred_at": "2026-10-01T11:50:00Z",
+        "amount": 2500
+      },
+      "action_ids": [
+        "contact_bank_scam",
+        "call_1930",
+        "preserve_evidence",
+        "file_cybercrime",
+        "record_follow_up"
+      ]
+    },
+    {
+      "name": "unauthorized debit",
+      "facts": {
+        "kind": "unauthorized_financial_transaction",
+        "occurred_at": "2026-10-01T11:50:00Z"
+      },
+      "action_ids": [
+        "contact_bank_unauthorized",
+        "call_1930",
+        "preserve_evidence",
+        "file_cybercrime",
+        "record_follow_up"
+      ]
+    },
+    {
+      "name": "unknown authorization",
+      "facts": {
+        "kind": "financial_authorization_unknown"
+      },
+      "action_ids": [
+        "contact_bank_unknown",
+        "call_1930",
+        "preserve_evidence",
+        "file_cybercrime",
+        "record_follow_up"
+      ]
+    },
+    {
+      "name": "older incident",
+      "facts": {
+        "kind": "financial_scam_transfer",
+        "occurred_at": "2026-08-01T12:00:00Z"
+      },
+      "action_ids": [
+        "contact_bank_scam",
+        "call_1930",
+        "preserve_evidence",
+        "file_cybercrime",
+        "record_follow_up"
+      ]
+    },
+    {
+      "name": "ongoing access",
+      "facts": {
+        "kind": "financial_scam_transfer",
+        "remote_access": true,
+        "account_compromised": true
+      },
+      "action_ids": [
+        "report_ongoing_access",
+        "contact_bank_scam",
+        "call_1930",
+        "preserve_evidence",
+        "file_cybercrime",
+        "record_follow_up"
+      ]
+    },
+    {
+      "name": "missing reporting facts",
+      "facts": {
+        "kind": "unauthorized_financial_transaction",
+        "amount": null,
+        "transaction_id": null
+      },
+      "action_ids": [
+        "contact_bank_unauthorized",
+        "call_1930",
+        "preserve_evidence",
+        "file_cybercrime",
+        "record_follow_up"
+      ]
+    },
+    {
+      "name": "explicit unknown flags",
+      "facts": {
+        "kind": "financial_authorization_unknown",
+        "account_compromised": null,
+        "remote_access": null,
+        "ongoing_loss": null
+      },
+      "action_ids": [
+        "contact_bank_unknown",
+        "call_1930",
+        "preserve_evidence",
+        "file_cybercrime",
+        "record_follow_up"
+      ]
+    }
+  ]
+}

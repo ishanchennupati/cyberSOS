@@ -5,8 +5,23 @@ from fastapi.testclient import TestClient
 
 from app.services.incident_service import LARGE_AMOUNT_THRESHOLD, MISSING_UTR_TEXT
 from app.core.config import get_settings
+import pytest
 
 NOW = datetime(2026, 8, 24, 12, 0, 0, tzinfo=timezone.utc)
+
+
+@pytest.fixture(autouse=True)
+def _fixed_api_clock(monkeypatch):
+    from app.services import incident_service
+    from app.rules import action_rules
+
+    class FixedDatetime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return NOW.astimezone(tz) if tz else NOW.replace(tzinfo=None)
+
+    monkeypatch.setattr(incident_service, "datetime", FixedDatetime)
+    monkeypatch.setattr(action_rules, "datetime", FixedDatetime)
 
 
 def _create(client: TestClient) -> str:
@@ -71,10 +86,10 @@ def test_triage_empty_transaction_id_stored_as_null(client: TestClient) -> None:
     assert response.json()["transaction_id"] is None
 
 
-def test_action_plan_before_triage_is_conflict(client: TestClient) -> None:
+def test_action_plan_is_available_before_reporting_fields(client: TestClient) -> None:
     incident_id = _create(client)
     response = client.get(f"/api/v1/incidents/{incident_id}/action-plan")
-    assert response.status_code == 409
+    assert response.status_code == 200
 
 
 def test_action_plan_includes_draft_and_actions(client: TestClient) -> None:
@@ -91,7 +106,8 @@ def test_action_plan_includes_draft_and_actions(client: TestClient) -> None:
     assert data["large_amount"] is True
     assert len(data["actions"]) >= 1
     assert any(item["phone"] == "1930" for item in data["actions"])
-    assert any(item["id"] == "bank_fraud_desk" for item in data["actions"])
+    assert not any(item["id"] == "bank_fraud_desk" for item in data["actions"])
+    assert "recovery_window" not in data
     draft = data["complaint_draft"]["body"]
     assert MISSING_UTR_TEXT in draft
     assert "₹1,00,000.00" in draft
@@ -207,7 +223,7 @@ def test_other_crime_details_update_validates_and_persists(client: TestClient) -
 def test_evidence_upload_persists_metadata_and_file(
     client: TestClient, tmp_path: Path, monkeypatch
 ) -> None:
-    monkeypatch.setattr(get_settings(), "EVIDENCE_STORAGE_DIR", str(tmp_path))
+    monkeypatch.setattr(get_settings(), "LOCAL_STORAGE_ROOT", str(tmp_path))
     incident_id = _create(client)
     response = client.post(
         f"/api/v1/incidents/{incident_id}/evidence",
@@ -216,9 +232,9 @@ def test_evidence_upload_persists_metadata_and_file(
     assert response.status_code == 201, response.text
     data = response.json()
     assert data["original_filename"] == "proof.txt"
-    assert data["content_type"] == "text/plain"
-    assert data["size_bytes"] == len(b"evidence contents")
-    assert list(tmp_path.iterdir())[0].read_bytes() == b"evidence contents"
+    assert data["mime_type"] == "text/plain"
+    assert data["file_size"] == len(b"evidence contents")
+    assert next(tmp_path.rglob("proof.txt")).read_bytes() == b"evidence contents"
 
 
 def test_women_children_immediate_danger_is_critical_and_safety_first(client: TestClient) -> None:

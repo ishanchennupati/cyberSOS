@@ -1,3 +1,7 @@
+> LEGACY HISTORICAL DOCUMENT - not the current roadmap or implementation status.
+> Archived during Phase 0C. See ../roadmap.md, ../architecture.md and ../../README.md.
+> Historical phase numbering and unsupported claims below are not current guidance.
+
 # CyberSOS — Phase 3: Evidence Vault — Completion Report
 
 This documents what was built on top of the existing Phase 0/1 codebase

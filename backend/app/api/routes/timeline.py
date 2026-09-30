@@ -6,8 +6,9 @@ from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.schemas.evidence import TimelineEventCreate, TimelineEventRead, TimelineEventUpdate
 from app.services import incident_service, timeline_service
+from app.services.case_access import authorize_case_resource
 
-router = APIRouter(tags=["timeline"])
+router = APIRouter(tags=["timeline"], dependencies=[Depends(authorize_case_resource)])
 
 
 @router.post(
@@ -21,7 +22,10 @@ def create_event(
     incident = incident_service.get_incident(db, incident_id)
     if incident is None:
         raise HTTPException(status_code=404, detail="Incident not found")
-    return timeline_service.create_event(db, incident_id, payload)
+    try:
+        return timeline_service.create_event(db, incident_id, payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @router.get("/incidents/{incident_id}/timeline", response_model=list[TimelineEventRead])

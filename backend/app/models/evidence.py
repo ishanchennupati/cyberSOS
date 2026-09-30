@@ -95,12 +95,14 @@ class Evidence(Base):
     original_filename: Mapped[str] = mapped_column(String(512), nullable=False)
     # Path inside the storage bucket (Supabase) or local storage root.
     # Never a public/permanent URL — see storage_service.
-    storage_path: Mapped[str] = mapped_column(String(1024), nullable=False)
+    storage_path: Mapped[str] = mapped_column(String(1024), nullable=False, unique=True)
 
-    mime_type: Mapped[str] = mapped_column(String(120), nullable=False)
+    mime_type: Mapped[str | None] = mapped_column(String(128), nullable=True)
     file_size: Mapped[int] = mapped_column(BigInteger, nullable=False)
 
-    sha256_hash: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    # Legacy rows whose original bytes are unavailable have an unknown hash.
+    # New uploads always compute it before saving.
+    sha256_hash: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
 
     evidence_type: Mapped[EvidenceType] = mapped_column(
         Enum(EvidenceType, name="evidence_type_enum"),

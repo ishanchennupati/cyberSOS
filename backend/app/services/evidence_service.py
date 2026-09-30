@@ -4,6 +4,8 @@ import uuid
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
+from fastapi import UploadFile
+from app.core.config import get_settings
 
 from app.models.evidence import Evidence, EvidenceType, ExtractionStatus, VerificationStatus
 from app.models.incident import Incident
@@ -14,13 +16,59 @@ from app.schemas.evidence import (
     ExtractedFinancialData,
     FieldComparison,
     ReadinessItem,
+    EvidenceRead,
+    VerifyRequest,
+    VerifyResponse,
 )
 from app.services import hash_service, storage_service
 from app.services.evidence_extraction import extract_evidence
 from app.services.file_validation import FileValidationError, validate_evidence_file
-from app.services.incident_service import format_inr
+from app.domain.policy import EvidenceContentKind, EvidencePolicy, POLICIES, check_values
+from app.services.incident_presentation import format_inr
 
 MAX_DESCRIPTION_LEN = 2000
+
+
+def to_read(evidence: Evidence) -> EvidenceRead:
+    result = EvidenceRead.model_validate(evidence)
+    result.preview_url = f"/api/v1/evidence/{evidence.id}/file"
+    return result
+
+
+def read_original(evidence: Evidence) -> tuple[bytes | None, str | None]:
+    backend = storage_service.get_storage_backend()
+    # Private originals stay behind the case-authenticated API, including cloud storage.
+    return backend.download(evidence.storage_path), None
+
+
+async def upload_evidence(db: Session, incident: Incident, upload: UploadFile, *,
+                          evidence_type: EvidenceType, description: str | None,
+                          content_kind: EvidenceContentKind = EvidenceContentKind.general_document) -> Evidence:
+    # Bound the application read even for requests lacking Content-Length.
+    data = await upload.read(get_settings().max_evidence_file_size_bytes + 1)
+    policy = POLICIES.get(incident.playbook_id, EvidencePolicy())
+    policy.check(content_kind, (description or "") + " " + (upload.filename or ""))
+    if upload.content_type == "text/plain":
+        policy.check(content_kind, data.decode("utf-8", errors="replace"))
+    evidence = create_evidence(db, incident, filename=upload.filename or "evidence",
+                              mime_type=upload.content_type or "application/octet-stream",
+                              file_bytes=data, evidence_type=evidence_type, description=description)
+    from app.services.timeline_service import log_event
+    log_event(db, incident.id, event_type="evidence_uploaded",
+              description=f"{evidence.original_filename} uploaded"[:500], source_evidence_id=evidence.id)
+    return evidence
+
+
+def verify_for_incident(db: Session, evidence: Evidence, incident: Incident,
+                       payload: VerifyRequest) -> VerifyResponse:
+    comparison = compare_with_incident(incident, payload.extracted_data.model_dump())
+    status = payload.verification_status if comparison.all_match else VerificationStatus.needs_review
+    updated = verify_evidence(db, evidence, payload.extracted_data, status)
+    if status == VerificationStatus.verified:
+        from app.services.timeline_service import log_event
+        log_event(db, incident.id, event_type="evidence_verified",
+                  description=f"{evidence.original_filename} verified"[:500], source_evidence_id=evidence.id)
+    return VerifyResponse(evidence=to_read(updated), comparison=comparison)
 
 
 def create_evidence(
@@ -62,7 +110,12 @@ def create_evidence(
         verification_status=VerificationStatus.unverified,
     )
     db.add(evidence)
-    db.commit()
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+        backend.delete(storage_path)
+        raise
     db.refresh(evidence)
     return evidence
 
@@ -77,6 +130,7 @@ def get_evidence(db: Session, evidence_id: uuid.UUID) -> Evidence | None:
 
 
 def update_evidence(db: Session, evidence: Evidence, payload: EvidenceUpdate) -> Evidence:
+    check_values(payload.model_dump(mode="json"))
     if payload.evidence_type is not None:
         evidence.evidence_type = payload.evidence_type
     if payload.description is not None:
@@ -100,6 +154,8 @@ def delete_evidence(db: Session, evidence: Evidence) -> None:
 
 
 def run_extraction(db: Session, evidence: Evidence) -> Evidence:
+    if evidence.verification_status == VerificationStatus.verified:
+        raise ValueError("Verified evidence cannot be re-extracted. Edit the reviewed details explicitly.")
     evidence.extraction_status = ExtractionStatus.processing
     db.commit()
 
@@ -118,6 +174,14 @@ def run_extraction(db: Session, evidence: Evidence) -> Evidence:
         filename=evidence.original_filename,
         evidence_type=evidence.evidence_type,
     )
+    try:
+        check_values(result.data.model_dump() if result.data else None)
+    except ValueError:
+        evidence.extraction_status = ExtractionStatus.failed
+        evidence.extracted_data = None
+        db.commit()
+        db.refresh(evidence)
+        return evidence
     evidence.extraction_status = result.status
     evidence.extracted_data = result.data.model_dump() if result.data else None
     # Extraction never verifies anything on its own.
@@ -135,6 +199,7 @@ def verify_evidence(
     """The citizen has reviewed (and possibly corrected) the extracted
     fields and explicitly confirmed them. This is the ONLY path that can
     set verification_status to verified."""
+    check_values(data.model_dump(mode="json"))
     evidence.extracted_data = data.model_dump()
     evidence.verification_status = status
     db.commit()

@@ -1,13 +1,10 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
 
 from app.api.v1 import api_router
 from app.core.config import get_settings
-from app.db.schema import ensure_schema
-from app.db.session import engine
-
-# Import models so they're registered on Base.metadata before create_all runs.
-from app.models import incident  # noqa: F401
 
 settings = get_settings()
 
@@ -26,15 +23,24 @@ app.add_middleware(
 )
 
 
-@app.on_event("startup")
-def on_startup() -> None:
-    # create_all for a fresh database, plus additive alters for Phase 0 DBs.
-    ensure_schema(engine)
-
-
 @app.get("/health", tags=["health"])
 def health() -> dict:
     return {"status": "ok", "service": settings.SERVICE_NAME}
 
 
 app.include_router(api_router, prefix=settings.API_V1_PREFIX)
+
+
+@app.exception_handler(ValueError)
+async def domain_rejection(_request, exc):
+    # Domain errors contain only controlled messages; never return raw file/text data.
+    return JSONResponse(status_code=422, content={"detail": "Submitted information violates the case policy or domain contract"})
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_rejection(_request, exc):
+    # Pydantic's default 'input' payload can echo credentials accidentally submitted.
+    return JSONResponse(status_code=422, content={"detail": [
+        {"loc": error["loc"], "type": error["type"], "msg": error["msg"]}
+        for error in exc.errors()
+    ]})

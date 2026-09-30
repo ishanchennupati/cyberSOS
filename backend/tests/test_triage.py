@@ -21,17 +21,17 @@ def _ago(**kwargs: float) -> datetime:
         ({"seconds": 0}, Urgency.critical),
         ({"minutes": 59, "seconds": 59}, Urgency.critical),
         ({"hours": 1}, Urgency.critical),
-        ({"hours": 1, "microseconds": 1}, Urgency.high),
-        ({"hours": 23, "minutes": 59}, Urgency.high),
+        ({"hours": 1, "microseconds": 1}, Urgency.critical),
+        ({"hours": 23, "minutes": 59}, Urgency.critical),
         ({"hours": 24}, Urgency.high),
-        ({"hours": 24, "microseconds": 1}, Urgency.medium),
-        ({"days": 2, "hours": 23}, Urgency.medium),
+        ({"hours": 24, "microseconds": 1}, Urgency.high),
+        ({"days": 2, "hours": 23}, Urgency.high),
         ({"days": 3}, Urgency.medium),
-        ({"days": 3, "microseconds": 1}, Urgency.medium_low),
-        ({"days": 29, "hours": 23}, Urgency.medium_low),
-        ({"days": 30}, Urgency.medium_low),
-        ({"days": 30, "microseconds": 1}, Urgency.standard),
-        ({"days": 90}, Urgency.standard),
+        ({"days": 3, "microseconds": 1}, Urgency.medium),
+        ({"days": 29, "hours": 23}, Urgency.low),
+        ({"days": 30}, Urgency.low),
+        ({"days": 30, "microseconds": 1}, Urgency.low),
+        ({"days": 90}, Urgency.low),
     ],
 )
 def test_time_boundaries_small_amount(elapsed_kwargs: dict, expected: Urgency) -> None:
@@ -54,19 +54,19 @@ def test_naive_datetime_treated_as_utc() -> None:
         ({"hours": 1}, Urgency.critical, Urgency.critical),
         ({"hours": 24}, Urgency.high, Urgency.critical),
         ({"days": 3}, Urgency.medium, Urgency.high),
-        ({"days": 30}, Urgency.medium_low, Urgency.medium),
-        ({"days": 45}, Urgency.standard, Urgency.medium_low),
+        ({"days": 30}, Urgency.low, Urgency.medium),
+        ({"days": 45}, Urgency.low, Urgency.medium_low),
     ],
 )
-def test_large_amount_bumps_one_tier(
+def test_large_amount_does_not_bump_priority(
     elapsed_kwargs: dict, base: Urgency, bumped: Urgency
 ) -> None:
     occurred = _ago(**elapsed_kwargs)
     assert compute_urgency(occurred, JUST_UNDER_LARGE, now=NOW) == base
-    assert compute_urgency(occurred, LARGE, now=NOW) == bumped
-    assert compute_urgency(occurred, LARGE + 1, now=NOW) == bumped
+    assert compute_urgency(occurred, LARGE, now=NOW) == base
+    assert compute_urgency(occurred, LARGE + 1, now=NOW) == base
 
 
 def test_none_amount_does_not_bump() -> None:
     occurred = _ago(days=45)
-    assert compute_urgency(occurred, None, now=NOW) == Urgency.standard
+    assert compute_urgency(occurred, None, now=NOW) == Urgency.low

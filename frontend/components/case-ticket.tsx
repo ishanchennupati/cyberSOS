@@ -3,7 +3,7 @@ import { ShieldCheck } from "lucide-react";
 /**
  * The page's signature element: a stamped "intake ticket" that reads like
  * a real civic-service form stub, not a product screenshot. It exists to
- * make the promise concrete — this becomes a real, trackable case.
+ * illustrate a synthetic draft; it is not an official or tracked case.
  */
 export function CaseTicket() {
   return (

@@ -94,6 +94,7 @@ function ActionRow({ item, index }: { item: ActionItem; index: number }) {
       </span>
       <div className="min-w-0 flex-1">
         <p className="font-medium text-ink">{item.title}</p>
+        <p className="mt-1 text-sm leading-relaxed text-ink">{item.instruction}</p>
         <p className="mt-1 text-sm leading-relaxed text-ink-muted">{item.why}</p>
         <div className="mt-3 flex flex-wrap gap-2">
           {item.phone && (
@@ -162,7 +163,7 @@ export function ResultScreen({ plan, incidentId }: ResultScreenProps) {
         </div>
       </div>
 
-      {(plan.urgency_reasons?.length || plan.recovery_window) && (
+      {Boolean(plan.urgency_reasons?.length) && (
         <section className="mt-6 rounded-lg border border-line bg-surface px-5 py-5" aria-labelledby="urgency-reasons">
           <h2 id="urgency-reasons" className="font-display text-2xl text-ink">Why this is urgent</h2>
           <ul className="mt-3 list-disc space-y-2 pl-5 text-sm leading-relaxed text-ink-muted">
@@ -170,11 +171,6 @@ export function ResultScreen({ plan, incidentId }: ResultScreenProps) {
               <li key={reason.rule_id}>{reason.human_readable_reason}</li>
             ))}
           </ul>
-          {plan.recovery_window && plan.recovery_window !== "not_applicable" && (
-            <p className="mt-4 border-t border-line pt-3 text-sm text-ink-muted">
-              Recovery window: <strong className="text-ink">{plan.recovery_window.replaceAll("_", " ")}</strong>. Immediate action may improve the opportunity for intervention; recovery is not guaranteed.
-            </p>
-          )}
         </section>
       )}
 
@@ -192,7 +188,7 @@ export function ResultScreen({ plan, incidentId }: ResultScreenProps) {
         <h2 className="mt-2 font-display text-2xl text-ink">Prepare your complaint</h2>
         <p className="mt-2 max-w-xl text-[15px] leading-relaxed text-ink-muted">
           Your answers are now a complaint draft. Review it, then open the official portal to file
-          it yourself. CyberSOS does not submit complaints without a government integration and your confirmation.
+          it yourself. CyberSOS does not submit complaints or track government responses.
         </p>
         {!showDraft ? (
           <Button

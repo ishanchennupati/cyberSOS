@@ -10,8 +10,9 @@ from app.schemas.evidence import (
     SuspectIdentifierUpdate,
 )
 from app.services import incident_service, suspect_service
+from app.services.case_access import authorize_case_resource
 
-router = APIRouter(tags=["suspects"])
+router = APIRouter(tags=["suspects"], dependencies=[Depends(authorize_case_resource)])
 
 
 @router.post(
@@ -25,7 +26,10 @@ def create_suspect(
     incident = incident_service.get_incident(db, incident_id)
     if incident is None:
         raise HTTPException(status_code=404, detail="Incident not found")
-    return suspect_service.create_suspect(db, incident_id, payload)
+    try:
+        return suspect_service.create_suspect(db, incident_id, payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @router.get("/incidents/{incident_id}/suspects", response_model=list[SuspectIdentifierRead])

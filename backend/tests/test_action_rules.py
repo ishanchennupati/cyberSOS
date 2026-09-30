@@ -13,12 +13,12 @@ NOW = datetime(2026, 8, 24, 12, tzinfo=timezone.utc)
 @pytest.mark.parametrize(
     ("age", "has_transaction_id", "priority", "actions"),
     [
-        (timedelta(hours=1), True, Urgency.critical, ["contact_bank_now", "call_1930", "preserve_evidence", "file_complaint"]),
-        (timedelta(hours=24), True, Urgency.high, ["contact_bank", "call_1930_or_file_online", "preserve_evidence"]),
-        (timedelta(hours=24), False, Urgency.high, ["retrieve_transaction_id", "contact_bank", "call_1930_or_file_online", "preserve_evidence"]),
-        (timedelta(hours=72), True, Urgency.medium, ["file_complaint", "contact_bank_if_not_already", "preserve_evidence"]),
-        (timedelta(hours=72), False, Urgency.medium, ["retrieve_transaction_id", "file_complaint", "contact_bank", "preserve_evidence"]),
-        (timedelta(days=7), True, Urgency.low, ["file_complaint", "preserve_evidence"]),
+        (timedelta(hours=1), True, Urgency.critical, ["contact_bank_unknown", "call_1930", "preserve_evidence", "file_cybercrime", "record_follow_up"]),
+        (timedelta(hours=24), True, Urgency.high, ["contact_bank_unknown", "call_1930", "preserve_evidence", "file_cybercrime", "record_follow_up"]),
+        (timedelta(hours=24), False, Urgency.high, ["contact_bank_unknown", "call_1930", "preserve_evidence", "file_cybercrime", "record_follow_up"]),
+        (timedelta(hours=72), True, Urgency.medium, ["contact_bank_unknown", "call_1930", "preserve_evidence", "file_cybercrime", "record_follow_up"]),
+        (timedelta(hours=72), False, Urgency.medium, ["contact_bank_unknown", "call_1930", "preserve_evidence", "file_cybercrime", "record_follow_up"]),
+        (timedelta(days=7), True, Urgency.low, ["contact_bank_unknown", "call_1930", "preserve_evidence", "file_cybercrime", "record_follow_up"]),
     ],
 )
 def test_financial_fraud_matrix(age, has_transaction_id, priority, actions) -> None:
@@ -48,7 +48,7 @@ def test_age_cutoffs(age, priority) -> None:
     assert determine_action_plan(IncidentType.financial_fraud, NOW - age, None, True, now=NOW).priority == priority
 
 
-def test_large_amount_adds_fir_without_changing_priority() -> None:
+def test_large_amount_does_not_add_fir_or_change_priority() -> None:
     plan = determine_action_plan(
         IncidentType.financial_fraud,
         NOW - timedelta(days=2),
@@ -57,16 +57,16 @@ def test_large_amount_adds_fir_without_changing_priority() -> None:
         now=NOW,
     )
     assert plan.priority == Urgency.high
-    assert plan.actions[-1] == "consider_fir"
+    assert "consider_fir" not in plan.actions
 
 
-def test_small_recent_pending_fraud_has_open_recovery_window() -> None:
+def test_small_recent_pending_fraud_has_no_recovery_prediction() -> None:
     plan = determine_action_plan(
         IncidentType.financial_fraud, NOW - timedelta(minutes=20), Decimal("2000"),
         True, now=NOW, transaction_status="pending"
     )
     assert plan.priority == Urgency.critical
-    assert plan.recovery_window == "open"
+    assert not hasattr(plan, "recovery_window")
 
 
 def test_large_old_fraud_is_not_automatically_critical() -> None:
@@ -76,7 +76,7 @@ def test_large_old_fraud_is_not_automatically_critical() -> None:
     )
     assert plan.priority == Urgency.low
     assert plan.severity == Urgency.critical
-    assert plan.ongoing_risk == Urgency.low
+    assert plan.ongoing_risk is None
 
 
 def test_ongoing_compromise_overrides_small_amount_and_age() -> None:
@@ -103,7 +103,7 @@ def test_completed_low_value_old_incident_is_low() -> None:
         True, now=NOW, transaction_status="completed", account_secured=True
     )
     assert plan.priority == Urgency.low
-    assert plan.recovery_window == "likely_expired"
+    assert not hasattr(plan, "recovery_window")
 
 
 def test_women_children_physical_danger_is_critical() -> None:

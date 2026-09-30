@@ -36,6 +36,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   try {
     response = await fetch(`${API_URL}${path}`, {
       ...init,
+      credentials: "include",
       headers: {
         ...(isMultipart ? {} : { "Content-Type": "application/json" }),
         ...init?.headers,
@@ -67,7 +68,21 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     throw new ApiError(detail, response.status);
   }
 
+  if (response.status === 204) return undefined as T;
   return (await response.json()) as T;
+}
+
+function resolveEvidencePreview(evidence: Evidence): Evidence {
+  return {
+    ...evidence,
+    preview_url: evidence.preview_url
+      ? new URL(evidence.preview_url, API_URL).toString()
+      : null,
+  };
+}
+
+async function evidenceRequest(path: string, init?: RequestInit): Promise<Evidence> {
+  return resolveEvidencePreview(await request<Evidence>(path, init));
 }
 
 export function getApiHealth() {
@@ -102,7 +117,7 @@ export function uploadEvidence(
   form.append("file", file);
   form.append("evidence_type", evidenceType);
   if (description) form.append("description", description);
-  return request<Evidence>(`/api/v1/incidents/${incidentId}/evidence`, {
+  return evidenceRequest(`/api/v1/incidents/${incidentId}/evidence`, {
     method: "POST",
     body: form,
   });
@@ -113,11 +128,13 @@ export function getActionPlan(id: string) {
 }
 
 export function listEvidence(incidentId: string) {
-  return request<Evidence[]>(`/api/v1/incidents/${incidentId}/evidence`);
+  return request<Evidence[]>(`/api/v1/incidents/${incidentId}/evidence`).then(
+    (items) => items.map(resolveEvidencePreview)
+  );
 }
 
 export function getEvidence(evidenceId: string) {
-  return request<Evidence>(`/api/v1/evidence/${evidenceId}`);
+  return evidenceRequest(`/api/v1/evidence/${evidenceId}`);
 }
 
 export function updateEvidence(
@@ -129,7 +146,7 @@ export function updateEvidence(
     verification_status: VerificationStatus;
   }>
 ) {
-  return request<Evidence>(`/api/v1/evidence/${evidenceId}`, {
+  return evidenceRequest(`/api/v1/evidence/${evidenceId}`, {
     method: "PATCH",
     body: JSON.stringify(payload),
   });
@@ -140,7 +157,7 @@ export function deleteEvidence(evidenceId: string) {
 }
 
 export function extractEvidence(evidenceId: string) {
-  return request<Evidence>(`/api/v1/evidence/${evidenceId}/extract`, { method: "POST" });
+  return evidenceRequest(`/api/v1/evidence/${evidenceId}/extract`, { method: "POST" });
 }
 
 export function verifyEvidence(
@@ -151,7 +168,7 @@ export function verifyEvidence(
   return request<VerifyResponse>(`/api/v1/evidence/${evidenceId}/verify`, {
     method: "POST",
     body: JSON.stringify({ extracted_data: extractedData, verification_status: verificationStatus }),
-  });
+  }).then((result) => ({ ...result, evidence: resolveEvidencePreview(result.evidence) }));
 }
 
 export function compareEvidence(evidenceId: string) {

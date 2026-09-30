@@ -1,5 +1,7 @@
 import uuid
 from datetime import datetime
+from typing import Literal
+from app.domain.response import ResponseAction as ActionItem
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -88,6 +90,14 @@ class IncidentCreate(BaseModel):
 
 
 class IncidentRead(BaseModel):
+    playbook_id: str | None = None
+    playbook_version: str | None = None
+    fact_schema_version: str | None = None
+    plan_revision: int = 0
+    bank: str | None = None
+    wallet: str | None = None
+    merchant: str | None = None
+    description: str | None = None
     model_config = ConfigDict(from_attributes=True)
 
     id: uuid.UUID
@@ -97,8 +107,8 @@ class IncidentRead(BaseModel):
     incident_time: datetime | None
     occurred_at: datetime | None = None
     transaction_id: str | None = None
-    transaction_status: str | None = None
-    is_fraud_ongoing: bool | None = None
+    transaction_status: Literal["pending", "completed", "unknown"] | None = None
+    authorization: Literal["authorized", "unauthorized", "unknown"] = "unknown"
     is_fraud_ongoing: bool | None = None
     is_account_compromised: bool | None = None
     is_credentials_exposed: bool | None = None
@@ -128,7 +138,7 @@ class IncidentRead(BaseModel):
     urgency_computed_at: datetime | None = None
     severity: Urgency | None = None
     ongoing_risk: Urgency | None = None
-    recovery_window: str | None = None
+
     urgency_reasons: list[dict[str, str]] | None = None
     status: IncidentStatus
     created_at: datetime
@@ -155,21 +165,22 @@ class TriageRequest(BaseModel):
     attacker_active: bool | None = None
     sensitive_information_exposed: bool | None = None
     evidence_types: list[str] | None = None
-    occurred_at: datetime
+    occurred_at: datetime | None = None
     amount: float | None = Field(default=None, ge=0, le=MAX_INCIDENT_AMOUNT)
     payment_method: PaymentMethod = PaymentMethod.unknown
     transaction_id: str | None = Field(default=None, max_length=128)
-    transaction_status: str | None = None
-    is_fraud_ongoing: bool = False
-    is_account_compromised: bool = False
-    is_credentials_exposed: bool = False
-    is_otp_shared: bool = False
-    is_pin_shared: bool = False
-    is_password_shared: bool = False
-    is_remote_access_granted: bool = False
-    unauthorized_activity_continuing: bool = False
-    potential_additional_loss: bool = False
-    account_secured: bool = False
+    transaction_status: Literal["pending", "completed", "unknown"] | None = None
+    authorization: Literal["authorized", "unauthorized", "unknown"] = "unknown"
+    is_fraud_ongoing: bool | None = None
+    is_account_compromised: bool | None = None
+    is_credentials_exposed: bool | None = None
+    is_otp_shared: bool | None = None
+    is_pin_shared: bool | None = None
+    is_password_shared: bool | None = None
+    is_remote_access_granted: bool | None = None
+    unauthorized_activity_continuing: bool | None = None
+    potential_additional_loss: bool | None = None
+    account_secured: bool | None = None
     evidence_available: bool | None = None
     other_crime_sub_category: OtherCrimeSubCategory | None = None
     details: dict[str, object] | None = None
@@ -185,11 +196,6 @@ class TriageRequest(BaseModel):
 
     @model_validator(mode="after")
     def validate_category_payload(self) -> "TriageRequest":
-        if self.incident_type == IncidentType.financial_fraud:
-            if self.amount is None or self.amount <= 0:
-                raise ValueError("Financial fraud reports require an amount greater than zero.")
-            if self.payment_method == PaymentMethod.unknown:
-                raise ValueError("Financial fraud reports require a payment method.")
         if self.incident_type == IncidentType.other_cyber_crime and self.other_crime_sub_category is None and not self.incident_subtype:
             raise ValueError("Other cyber crime reports require a sub-category.")
         if self.incident_type == IncidentType.other_cyber_crime and not self.incident_subtype:
@@ -207,31 +213,15 @@ class IncidentDetailsUpdate(BaseModel):
         return self
 
 
-class EvidenceRead(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
-    id: uuid.UUID
-    incident_id: uuid.UUID
-    original_filename: str
-    content_type: str | None
-    size_bytes: int
-    created_at: datetime
-
-
-class ActionItem(BaseModel):
-    id: str
-    title: str
-    why: str
-    phone: str | None = None
-    url: str | None = None
-    url_label: str | None = None
-
-
 class ComplaintDraft(BaseModel):
     body: str
 
 
 class ActionPlanResponse(BaseModel):
+    playbook_id: str | None = None
+    playbook_version: str | None = None
+    fact_schema_version: str | None = None
+    plan_revision: int = 0
     urgency: Urgency
     urgency_label: str
     core_message: str
@@ -240,5 +230,5 @@ class ActionPlanResponse(BaseModel):
     complaint_draft: ComplaintDraft
     severity: Urgency | None = None
     ongoing_risk: Urgency | None = None
-    recovery_window: str | None = None
+
     urgency_reasons: list[dict[str, str]] = []

@@ -23,7 +23,6 @@ import httpx
 
 from app.core.config import get_settings
 
-settings = get_settings()
 
 
 class StorageError(Exception):
@@ -60,6 +59,7 @@ class StorageBackend(ABC):
 
 class SupabaseStorageBackend(StorageBackend):
     def __init__(self) -> None:
+        settings = get_settings()
         if not settings.supabase_configured:
             raise StorageError("Supabase Storage is not configured.")
         self.base_url = settings.SUPABASE_URL.rstrip("/")  # type: ignore[union-attr]
@@ -132,7 +132,8 @@ class LocalDiskStorageBackend(StorageBackend):
     """Dev/test fallback. Never used when Supabase is configured."""
 
     def __init__(self) -> None:
-        self.root = Path(settings.LOCAL_STORAGE_ROOT)
+        settings = get_settings()
+        self.root = Path(settings.LOCAL_STORAGE_ROOT or settings.EVIDENCE_STORAGE_DIR)
         self.root.mkdir(parents=True, exist_ok=True)
 
     def _resolve(self, path: str) -> Path:
@@ -162,6 +163,7 @@ class LocalDiskStorageBackend(StorageBackend):
 
 
 def get_storage_backend() -> StorageBackend:
+    settings = get_settings()
     if settings.supabase_configured:
         return SupabaseStorageBackend()
     return LocalDiskStorageBackend()

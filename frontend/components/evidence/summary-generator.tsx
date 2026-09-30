@@ -40,7 +40,7 @@ export function SummaryGenerator({ onGenerate, busy }: SummaryGeneratorProps) {
         <>
           <p className="mt-2 text-sm text-ink-muted">
             Generate a draft narrative from the information you&apos;ve verified and your own
-            description. Nothing is invented and nothing is submitted anywhere.
+            description. Check every detail before using the draft. Nothing is submitted anywhere.
           </p>
           <Button variant="calm" className="mt-4" onClick={handleGenerate} disabled={loading || busy}>
             <FileText size={16} aria-hidden="true" />
@@ -50,7 +50,7 @@ export function SummaryGenerator({ onGenerate, busy }: SummaryGeneratorProps) {
       ) : (
         <div className="mt-4">
           <p className="text-xs font-medium uppercase tracking-wide text-warn">
-            AI-generated draft — review carefully before using.
+            Draft from your information - review carefully before using.
           </p>
           {editing ? (
             <textarea

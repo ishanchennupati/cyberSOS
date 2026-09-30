@@ -15,7 +15,7 @@ export function StepTransactionId({ value, onChange, status, onStatusChange, ong
       </h1>
       <p className="mt-3 max-w-xl text-[15px] leading-relaxed text-ink-muted">
         This is optional — many people don&rsquo;t have it in front of them. If you can add it,
-        1930 and your bank can find the debit much faster.
+        include it in your report to identify the transaction. Do not delay urgent reporting to find it.
       </p>
 
       <label className="mt-8 block">

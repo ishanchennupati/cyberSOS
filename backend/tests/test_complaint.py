@@ -48,7 +48,7 @@ def test_present_transaction_id_is_used() -> None:
     assert MISSING_UTR_TEXT not in body
 
 
-def test_large_amount_boundary_includes_desk_action() -> None:
+def test_R1_large_amount_draft_does_not_include_escalation_claim() -> None:
     at_threshold = _draft(
         amount=LARGE_AMOUNT_THRESHOLD,
         transaction_id=None,
@@ -60,7 +60,7 @@ def test_large_amount_boundary_includes_desk_action() -> None:
         urgency=Urgency.medium_low,
     )
     assert "₹1,00,000.00" in at_threshold
-    assert "fraud/dispute desk" in at_threshold.lower()
+    assert "fraud/dispute desk" not in at_threshold.lower()
     assert "fraud/dispute desk" not in just_under.lower()
 
 

@@ -64,6 +64,7 @@ export interface IncidentCreatePayload {
 }
 
 export interface TriagePayload {
+  authorization?: "authorized" | "unauthorized" | "unknown";
   incident_type: IncidentType;
   incident_subtype?: string | null;
   affected_person_type?: string | null;
@@ -88,14 +89,19 @@ export interface TriagePayload {
   is_pin_shared?: boolean;
   is_password_shared?: boolean;
   is_remote_access_granted?: boolean;
-  unauthorized_activity_continuing?: boolean;
-  potential_additional_loss?: boolean;
+  unauthorized_activity_continuing?: boolean | null;
+  potential_additional_loss?: boolean | null;
   account_secured?: boolean;
   evidence_available?: boolean | null;
   details?: Record<string, unknown> | null;
 }
 
 export interface Incident {
+  authorization: "authorized" | "unauthorized" | "unknown";
+  playbook_id?: string | null;
+  playbook_version?: string | null;
+  fact_schema_version?: string | null;
+  plan_revision?: number;
   id: string;
   incident_type: IncidentType;
   payment_method: PaymentMethod;
@@ -133,7 +139,6 @@ export interface Incident {
   urgency_computed_at: string | null;
   severity: Urgency | null;
   ongoing_risk: Urgency | null;
-  recovery_window: string | null;
   urgency_reasons: UrgencyReason[] | null;
   status: IncidentStatus;
   created_at: string;
@@ -141,6 +146,14 @@ export interface Incident {
 }
 
 export interface ActionItem {
+  instruction: string;
+  phase: "CONTAIN" | "PRESERVE" | "REPORT" | "FOLLOW_UP";
+  priority: Urgency;
+  order: number;
+  minimum_facts: string[];
+  applicability: string;
+  official_source_id: string | null;
+  can_mark_complete: boolean;
   id: string;
   title: string;
   why: string;
@@ -150,6 +163,10 @@ export interface ActionItem {
 }
 
 export interface ActionPlan {
+  playbook_id?: string | null;
+  playbook_version?: string | null;
+  fact_schema_version?: string | null;
+  plan_revision?: number;
   urgency: Urgency;
   urgency_label: string;
   core_message: string;
@@ -160,7 +177,6 @@ export interface ActionPlan {
   };
   severity?: Urgency | null;
   ongoing_risk?: Urgency | null;
-  recovery_window?: string | null;
   urgency_reasons?: UrgencyReason[];
 }
 

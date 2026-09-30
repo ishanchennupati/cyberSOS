@@ -7,11 +7,18 @@ from sqlalchemy.orm import Session
 
 from app.models.evidence import TimelineEvent
 from app.schemas.evidence import TimelineEventCreate, TimelineEventUpdate
+from app.domain.policy import check_values
 
 
 def create_event(
     db: Session, incident_id: uuid.UUID, payload: TimelineEventCreate
 ) -> TimelineEvent:
+    check_values(payload.model_dump(mode="json"))
+    if payload.source_evidence_id is not None:
+        from app.services.evidence_service import get_evidence
+        source = get_evidence(db, payload.source_evidence_id)
+        if source is None or source.incident_id != incident_id:
+            raise ValueError("Source evidence does not belong to this incident.")
     event = TimelineEvent(
         incident_id=incident_id,
         event_time=payload.event_time,
@@ -39,6 +46,7 @@ def get_event(db: Session, event_id: uuid.UUID) -> TimelineEvent | None:
 
 
 def update_event(db: Session, event: TimelineEvent, payload: TimelineEventUpdate) -> TimelineEvent:
+    check_values(payload.model_dump(mode="json"))
     if payload.event_time is not None:
         event.event_time = payload.event_time
     if payload.event_type is not None:

@@ -7,33 +7,6 @@ from decimal import Decimal
 from app.models.incident import IncidentType, Urgency
 from app.rules.constants import AGE_BUCKETS, AMOUNT_THRESHOLDS
 
-ACTION_RULES = {
-    (IncidentType.financial_fraud, "under_24_hours", True): (Urgency.critical, (
-        "contact_bank_now", "call_1930", "preserve_evidence", "file_complaint",
-    )),
-    (IncidentType.financial_fraud, "under_24_hours", False): (Urgency.critical, (
-        "contact_bank_now", "call_1930", "preserve_evidence", "file_complaint",
-    )),
-    (IncidentType.financial_fraud, "24_to_72_hours", True): (Urgency.high, (
-        "contact_bank", "call_1930_or_file_online", "preserve_evidence",
-    )),
-    (IncidentType.financial_fraud, "24_to_72_hours", False): (Urgency.high, (
-        "retrieve_transaction_id", "contact_bank", "call_1930_or_file_online", "preserve_evidence",
-    )),
-    (IncidentType.financial_fraud, "72_hours_to_7_days", True): (Urgency.medium, (
-        "file_complaint", "contact_bank_if_not_already", "preserve_evidence",
-    )),
-    (IncidentType.financial_fraud, "72_hours_to_7_days", False): (Urgency.medium, (
-        "retrieve_transaction_id", "file_complaint", "contact_bank", "preserve_evidence",
-    )),
-    (IncidentType.financial_fraud, "7_days_or_more", True): (Urgency.low, (
-        "file_complaint", "preserve_evidence",
-    )),
-    (IncidentType.financial_fraud, "7_days_or_more", False): (Urgency.low, (
-        "file_complaint", "preserve_evidence",
-    )),
-}
-
 URGENCY_RANK = {
     Urgency.low: 0,
     Urgency.standard: 1,
@@ -50,7 +23,6 @@ class ActionPlan:
     actions: list[str]
     severity: Urgency
     ongoing_risk: Urgency
-    recovery_window: str
     reasons: list[dict[str, str]]
 
 
@@ -117,7 +89,7 @@ def determine_women_children_plan(
         reasons.append(_reason("evidence_or_content", "WC-CONTENT-001", "The content or profile may still be available online; preserve it without redistribution.", Urgency.medium))
     if not reasons:
         reasons.append(_reason("baseline", "WC-BASELINE-001", "The report does not indicate an immediate or ongoing high-risk condition.", Urgency.low))
-    return ActionPlan(priority, [], Urgency.high if minor else Urgency.low, priority if priority != Urgency.low else Urgency.low, "not_applicable", reasons)
+    return ActionPlan(priority, [], Urgency.high if minor else Urgency.low, priority if priority != Urgency.low else Urgency.low, reasons)
 
 
 def determine_other_cyber_plan(
@@ -161,7 +133,7 @@ def determine_other_cyber_plan(
         apply("ransomware", "CYBER-RANSOMWARE-001", "Ransomware may be affecting files or systems.", Urgency.critical if unauthorized else Urgency.high)
     if not reasons:
         reasons.append(_reason("baseline", "CYBER-BASELINE-001", "The report does not indicate an active high-risk compromise.", Urgency.low))
-    return ActionPlan(priority, [], priority, priority if priority != Urgency.low else Urgency.low, "not_applicable", reasons)
+    return ActionPlan(priority, [], priority, priority if priority != Urgency.low else Urgency.low, reasons)
 
 
 def _as_utc(value: datetime) -> datetime:
@@ -185,76 +157,33 @@ def determine_action_plan(
     has_transaction_id: bool,
     now: datetime | None = None,
     transaction_status: str | None = None,
-    is_fraud_ongoing: bool = False,
-    is_account_compromised: bool = False,
-    is_credentials_exposed: bool = False,
-    is_otp_shared: bool = False,
-    is_pin_shared: bool = False,
-    is_password_shared: bool = False,
-    is_remote_access_granted: bool = False,
-    unauthorized_activity_continuing: bool = False,
-    potential_additional_loss: bool = False,
-    account_secured: bool = False,
+    is_fraud_ongoing: bool | None = None,
+    is_account_compromised: bool | None = None,
+    is_credentials_exposed: bool | None = None,
+    is_otp_shared: bool | None = None,
+    is_pin_shared: bool | None = None,
+    is_password_shared: bool | None = None,
+    is_remote_access_granted: bool | None = None,
+    unauthorized_activity_continuing: bool | None = None,
+    potential_additional_loss: bool | None = None,
+    account_secured: bool | None = None,
     evidence_available: bool | None = None,
 ) -> ActionPlan:
-    incident_type = IncidentType(incident_type)
-    age = _as_utc(now or datetime.now(timezone.utc)) - _as_utc(incident_datetime)
-    key = (incident_type, _age_bucket(age), has_transaction_id)
-    try:
-        base_priority, action_keys = ACTION_RULES[key]
-    except KeyError as exc:
-        raise ValueError(f"No action rules configured for {incident_type}") from exc
-    reasons = [_reason(
-        "time_sensitivity",
-        "FIN-AGE-001",
-        f"The incident occurred {_age_description(age)}.",
-        base_priority,
-    )]
-    priority = base_priority
-    if age < timedelta(hours=24):
-        recovery_window = "open"
-    elif age < timedelta(days=7):
-        recovery_window = "uncertain"
-    else:
-        recovery_window = "likely_expired"
-    if transaction_status == "pending":
-        recovery_window = "open"
-        reasons.append(_reason("transaction_status", "FIN-PENDING-001", "The transaction is still pending and may require immediate intervention.", Urgency.critical))
-        priority = max((priority, Urgency.critical), key=URGENCY_RANK.get)
-    elif transaction_status == "completed":
-        reasons.append(_reason("transaction_status", "FIN-COMPLETED-001", "The transaction is completed, so prompt reporting remains important.", Urgency.high if age < timedelta(days=1) else base_priority))
-    risk_flags = (
-        is_fraud_ongoing or unauthorized_activity_continuing or is_remote_access_granted
-        or potential_additional_loss
-    )
-    if risk_flags:
-        reasons.append(_reason("ongoing_risk", "FIN-ONGOING-001", "Unauthorized activity or additional loss may still be continuing.", Urgency.critical))
-        priority = max((priority, Urgency.critical), key=URGENCY_RANK.get)
-    elif is_account_compromised or is_credentials_exposed or is_otp_shared or is_pin_shared or is_password_shared:
-        reasons.append(_reason("ongoing_risk", "FIN-COMPROMISE-001", "Account access or sensitive credentials may still be at risk.", Urgency.high))
-        priority = max((priority, Urgency.high), key=URGENCY_RANK.get)
-    ongoing_risk = Urgency.critical if risk_flags else Urgency.high if (is_account_compromised or is_credentials_exposed or is_otp_shared or is_pin_shared or is_password_shared) else Urgency.low
-    amount_value = Decimal(str(amount)) if amount is not None else Decimal("0")
-    severity = (Urgency.critical if amount_value >= AMOUNT_THRESHOLDS["very_high"] else Urgency.high if amount_value >= AMOUNT_THRESHOLDS["high"] else Urgency.medium if amount_value >= AMOUNT_THRESHOLDS["moderate"] else Urgency.low)
-    if amount_value >= AMOUNT_THRESHOLDS["moderate"]:
-        reasons.append(_reason("financial_impact", "FIN-AMOUNT-001", "The reported financial loss increases the incident's severity.", severity))
-    if account_secured:
-        reasons.append(_reason("account_security", "FIN-SECURED-001", "The account is reported as secured, reducing ongoing-loss risk.", Urgency.low))
-    if evidence_available is False:
-        reasons.append(_reason("evidence", "FIN-EVIDENCE-001", "Evidence has not yet been identified; preserve records before they are lost.", Urgency.medium))
-    actions = list(action_keys)
-    if amount is not None and Decimal(str(amount)) >= AMOUNT_THRESHOLDS["fir"]:
-        actions.append("consider_fir")
-    return ActionPlan(priority=priority, actions=actions, severity=severity, ongoing_risk=ongoing_risk, recovery_window=recovery_window, reasons=reasons)
-
-
-def _age_description(age: timedelta) -> str:
-    if age < timedelta(hours=1):
-        return "less than 1 hour ago"
-    if age < timedelta(days=1):
-        return "within the last 24 hours"
-    if age < timedelta(days=3):
-        return "between 24 and 72 hours ago"
-    if age < timedelta(days=7):
-        return "within the last 7 days"
-    return "7 or more days ago"
+    """Deprecated Phase 0 adapter. Critical selection delegates to the versioned engine."""
+    from app.domain.facts import FACTS_ADAPTER
+    from app.domain.playbooks import evaluate
+    if IncidentType(incident_type) != IncidentType.financial_fraud:
+        raise ValueError("No financial playbook configured for this incident type")
+    def known_any(*values):
+        return True if any(v is True for v in values) else None if any(v is None for v in values) else False
+    facts = FACTS_ADAPTER.validate_python({"kind": "financial_authorization_unknown",
+        "occurred_at": incident_datetime, "amount": amount, "transaction_status": transaction_status,
+        "account_compromised": is_account_compromised, "remote_access": is_remote_access_granted,
+        "credentials_exposed": known_any(is_credentials_exposed, is_otp_shared, is_pin_shared, is_password_shared),
+        "ongoing_loss": known_any(is_fraud_ongoing, unauthorized_activity_continuing, potential_additional_loss),
+        "evidence_available": evidence_available})
+    plan = evaluate(facts, as_of=now or datetime.now(timezone.utc))
+    severity = None if amount is None else (Urgency.critical if Decimal(str(amount)) >= AMOUNT_THRESHOLDS["very_high"] else Urgency.high if Decimal(str(amount)) >= AMOUNT_THRESHOLDS["high"] else Urgency.medium if Decimal(str(amount)) >= AMOUNT_THRESHOLDS["moderate"] else Urgency.low)
+    risk = Urgency.critical if facts.ongoing_loss is True or facts.remote_access is True else Urgency.high if facts.account_compromised is True or facts.credentials_exposed is True else None
+    reasons = [_reason("playbook", "FIN-ONGOING-001" if risk == Urgency.critical else "FIN-PLAYBOOK-001", reason, plan.urgency) for reason in plan.reasons]
+    return ActionPlan(priority=plan.urgency, actions=[a.id for a in plan.actions], severity=severity, ongoing_risk=risk, reasons=reasons)

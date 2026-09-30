@@ -78,7 +78,9 @@ message/voice/upload → validated candidate facts → conversation state → de
 
 ## Verification before completion
 
-For application changes, discover and run the repository's actual commands. Normally this includes the complete backend test suite, frontend lint and production build, affected API contracts, and an affected end-to-end/manual smoke journey. Report unavailable checks and failures honestly. Documentation-only changes require a consistency review, not unrelated application tests.
+For application changes, discover and run the repository's actual commands. For small fixes, run affected checks only; broaden verification when the change or evidence warrants it. For phase implementations, run targeted checks during development and the complete acceptance suite once at the end. This normally includes the complete backend test suite, frontend lint and production build, affected API contracts, and an affected end-to-end/manual smoke journey. Repeat checks only after relevant changes or failures. Explicit task-specific verification requirements still apply. Report unavailable checks and failures honestly. Documentation-only changes require a consistency review, not unrelated application tests.
+
+Prioritize fixing and verifying the reported issue directly. Batch independent reads and checks, avoid unrelated cleanup and unnecessary approval pauses, and keep progress updates and completion reports concise. Preserve the safety, access-control, migration and evidence requirements above.
 
 Add meaningful tests for changed behavior, including as applicable:
 
@@ -90,6 +92,17 @@ Add meaningful tests for changed behavior, including as applicable:
 - No fabricated recovery/status claims; mobile/keyboard accessibility and speech failure when those flows change.
 
 Use synthetic data only in tests and demos. Check the final diff for secrets and generated database/evidence artifacts. Fix failures introduced by the task; distinguish pre-existing failures with evidence.
+
+## Phase protocol
+
+- Prompts name a step (for example 1B). Read docs/phase-status.md first. If the previous step has no recorded passing evidence, stop and report; do not guess.
+- Do only the named step. Do not start the next one. Do not commit, push, deploy, or spend money unless the prompt says so.
+- Steps marked PLAN-FIRST: before editing, write docs/plans/<step>.md (files to touch, approach, risks), then proceed without waiting.
+- Requirements are numbered R1, R2... Write or extend failing tests first where practical, named after the R they cover.
+- Take verification commands from docs/verification.md. Record commands, working directories and results in docs/phase-status.md.
+- Keep three results separate: local automated pass, live-provider pass, manual pass. "Not run" is never "passed".
+- Expected scenario behavior comes from backend/tests/fixtures/scenarios.yaml. Extend it when a step adds behavior.
+- The final report marks every R as done / partial / not done with evidence, then follows the Completion report format above.
 
 ## Completion report
 

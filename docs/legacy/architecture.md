@@ -1,3 +1,7 @@
+> LEGACY HISTORICAL DOCUMENT - not the current roadmap or implementation status.
+> Archived during Phase 0C. See ../roadmap.md, ../architecture.md and ../../README.md.
+> Historical phase numbering and unsupported claims below are not current guidance.
+
 # CyberSOS — Architecture (Phase 0)
 
 ## Overview

@@ -21,7 +21,7 @@ export function StepAmount({
     <div>
       <h1 className="font-display text-3xl text-ink sm:text-4xl">How much, and how was it paid?</h1>
       <p className="mt-3 max-w-xl text-[15px] leading-relaxed text-ink-muted">
-        The amount and the payment method change who you call and how a reversal is requested.
+        These details help describe the payment in your report. They do not determine whether you can report the incident.
       </p>
 
       <label className="mt-8 block">

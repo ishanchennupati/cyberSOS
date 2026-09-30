@@ -12,7 +12,6 @@ AMOUNT_THRESHOLDS = {
     "moderate": Decimal("10000"),
     "high": Decimal("50000"),
     "very_high": Decimal("100000"),
-    "fir": Decimal("100000"),
 }
 PRIORITY_TIERS = (
     Urgency.critical,

@@ -1,89 +1,58 @@
-# CyberSOS — Architecture (Phase 0)
+# Current architecture after Phase 1
 
-## Overview
+The existing Next.js guided financial UI calls FastAPI through lib/api.ts with
+credentials included. No conversational UI or new provider integration was added.
 
-```text
-┌────────────────┐        HTTPS/JSON        ┌──────────────────┐        SQL        ┌──────────────┐
-│  Next.js (FE)  │ ───────────────────────▶ │  FastAPI (BE)     │ ────────────────▶ │  PostgreSQL   │
-│  App Router    │ ◀─────────────────────── │  /api/v1/*        │ ◀──────────────── │  (Supabase or │
-└────────────────┘                          └──────────────────┘                    │   local)      │
-                                                                                       └──────────────┘
-```
+Validated IncidentFacts (Pydantic discriminated union) -> version-keyed
+ResponsePlaybook -> immutable ResponsePlan -> ordered ResponseActions.
+FinancialScamTransferFacts, UnauthorizedFinancialTransactionFacts and explicit
+unknown authorization keep missing amount/time/booleans null. Unverified critical
+inferences require review. Typed provenance can reference only evidence in the
+owning case. Critical decisions live in app/domain/playbooks.py with no AI/network
+imports. Fact priorities expose a future next-question seam, not a controller.
 
-Frontend and backend are independently runnable and communicate only over
-HTTP, using `NEXT_PUBLIC_API_URL` on the frontend side.
+Incident remains the canonical ORM; additive columns retain current playbook ID,
+version, fact schema, facts and revision. response_plans stores immutable full
+fact/action/source snapshots; reads never recalculate history with current rules.
+action_completions refers to a plan/action and contains only user self-report,
+notes and user-recorded references. It cannot represent official progress.
 
-## Frontend
+One OfficialSource registry in app/domain/sources.py owns financial official URLs,
+review dates and narrow supported claims. Plans snapshot the sources they use.
+Legacy nonfinancial rules remain limited existing behavior, now protected by case
+access. Deprecated financial wrappers delegate to the canonical engine.
 
-- **Next.js 14, App Router, TypeScript, Tailwind CSS**
-- `app/` — routes: `/` (landing) and `/incident/start` (first flow step)
-- `components/` — shared UI: `ui/button.tsx` (shadcn-style primitive),
-  `progress-steps.tsx`, `error-state.tsx`, `loading-state.tsx`,
-  `site-footer.tsx`, `case-ticket.tsx`
-- `lib/api.ts` — single place that talks to the backend; every request goes
-  through `request()`, which normalizes network failures, timeouts, and
-  non-2xx responses into a typed `ApiError` so the UI never renders a raw
-  stack trace
-- `types/incident.ts` — TypeScript types mirroring the backend's Pydantic
-  schemas, so payload shapes can't silently drift apart
+Private router dependencies resolve ownership before every operation. Creation
+issues a 256-bit random capability; only SHA-256 and server expiry are stored.
+Constant-time verification accepts a per-case HttpOnly/SameSite Strict cookie or
+X-Case-Secret header; no URL token. Secure defaults on. Private writes reject
+unapproved Origin values. Missing/wrong/expired/absent resources share 404. Original
+files pass through the authenticated backend even with optional cloud storage;
+private responses use no-store. UUID knowledge alone conveys no access.
 
-No business logic lives inside components beyond simple UI state
-(selected option, request status). Data fetching and error normalization
-live in `lib/api.ts`.
+Alembic head 20261001_response_foundation is additive and preserves Phase 0 data.
+Old cases have no fabricated facts/history and no assigned ownership capability;
+legacy_unversioned cases remain locked pending owner-verified administrative
+recovery, which is deferred. No startup DDL or destructive legacy rewrite.
 
-## Backend
+Evidence policy maps playbook IDs to declared content restrictions: credentials,
+explicit intimate media, CSAM and unnecessary identity documents are prohibited.
+Recognizable labelled credentials are rejected before text/metadata persistence.
+Semantic image moderation and complete sensitive-data detection are NOT implemented.
+Existing heuristic/optional extraction and manual correction remain; no Phase 5.
 
-- **FastAPI, Pydantic, SQLAlchemy, PostgreSQL, Uvicorn**
-- `app/main.py` — app wiring only: middleware, router mounting, startup
-  hook. No business logic.
-- `app/core/config.py` — environment-driven settings (`DATABASE_URL`,
-  `CORS_ORIGINS`), read once via `pydantic-settings`
-- `app/db/` — SQLAlchemy engine/session (`session.py`) and declarative
-  base (`base.py`)
-- `app/models/` — ORM models (`Incident`, plus its enum columns)
-- `app/schemas/` — Pydantic request/response schemas (`IncidentCreate`,
-  `IncidentRead`)
-- `app/services/` — business logic, e.g. `incident_service.py` (creation,
-  a placeholder urgency rule). Routes call services; they don't contain
-  logic themselves.
-- `app/api/routes/` — thin route handlers (`health.py`, `incidents.py`)
-- `app/api/v1.py` — aggregates route modules under `/api/v1`
+Tests use migrated temporary SQLite and temporary evidence. Full golden scenario,
+OpenAPI/frontend contract, migration, private-resource and browser checks are in
+verification.md. PostgreSQL, live providers and human manual verification remain
+unrun. Retention/account recovery readiness for real citizen data is not established.
+Phase 2 conversation/AI/voice and broader playbooks have not begun.
 
-## Database
+## Structure cleanup
 
-- PostgreSQL, reachable via `DATABASE_URL` (works the same for a local
-  Postgres instance or a hosted Supabase Postgres instance)
-- Alembic migrations in `backend/alembic/` track schema changes. The Phase 2
-  revision adds the Other Cyber Crime fields and evidence metadata table;
-  `ensure_schema` remains as additive compatibility support for older local
-  databases.
-- Single table so far: `incidents` (see `docs/product.md` for the field
-  list and enum values).
-
-## API communication
-
-- All endpoints are versioned under `/api/v1`, except the top-level
-  `/health` liveness check.
-- `GET /health` — API liveness
-- `GET /api/v1/health/database` — confirms the API can reach Postgres,
-  without ever returning connection details or credentials
-- `POST /api/v1/incidents` — create an incident from any supported guided flow
-- `GET /api/v1/incidents/{incident_id}` — fetch one incident
-- CORS is restricted to the origins listed in `CORS_ORIGINS`
-  (defaults to `http://localhost:3000`)
-
-## Future layers (not built yet)
-
-- **AI layer** — the frontend currently uses a deterministic guided-question
-  provider. An LLM-backed provider can replace that question list later,
-  returning the same structured `details` payload and leaving persistence and
-  complaint drafting unchanged.
-- **Evidence-processing layer** — OCR, image/screenshot parsing, and
-  structured extraction of transaction details. Phase 2 stores uploaded files
-  locally and records metadata in `evidence`; production should move file
-  bytes to object storage.
-- **Government-service links** — deeper, still non-authoritative,
-  integration such as pre-filling the citizen's own submission to
-  cybercrime.gov.in, or checking 1930 callback status if such an API
-  becomes available. CyberSOS will not submit anything on the citizen's
-  behalf without their explicit action, and will keep saying so.
+incident_service.py now orchestrates persistence/triage and current financial
+plans. Complaint formatting is in incident_presentation.py; old nonfinancial
+responses are in legacy_incident_service.py. Summary/evidence consumers import
+formatting directly; existing service helper import contracts remain available.
+The Next.js intake page renders UI; features/incident-intake/use-incident-flow.ts
+owns existing guided state, validation, session persistence and API orchestration.
+Identical date-change handlers are shared. No new conversation controller/UI.

@@ -19,13 +19,12 @@ export function StepWhen({ preset, exactValue, onPreset, onExactChange }: StepWh
   return (
     <div>
       <p className="font-mono text-xs uppercase tracking-widest text-urgent">
-        Most important question
+        Incident timing
       </p>
       <h1 className="mt-2 font-display text-3xl text-ink sm:text-4xl">When did this happen?</h1>
       <p className="mt-3 max-w-xl text-[15px] leading-relaxed text-ink-muted">
-        How recently the money left your account is the single biggest factor in whether it can
-        still be reversed. Pick the closest option — you can set an exact time below if you know
-        it.
+        This helps organize the incident timeline. Pick the closest option or enter an exact time
+        if you know it. CyberSOS cannot predict whether funds will be recovered.
       </p>
 
       <div

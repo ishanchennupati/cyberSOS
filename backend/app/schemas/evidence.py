@@ -65,9 +65,9 @@ class EvidenceRead(BaseModel):
     id: uuid.UUID
     incident_id: uuid.UUID
     original_filename: str
-    mime_type: str
+    mime_type: str | None
     file_size: int
-    sha256_hash: str
+    sha256_hash: str | None
     evidence_type: EvidenceType
     description: str | None
     extraction_status: ExtractionStatus
@@ -197,4 +197,4 @@ class IncidentDescriptionUpdate(BaseModel):
 class GenerateSummaryResponse(BaseModel):
     draft: str
     provider: str
-    disclaimer: str = "AI-generated draft — review carefully before using."
+    disclaimer: str = "Draft from your information - review carefully before using."

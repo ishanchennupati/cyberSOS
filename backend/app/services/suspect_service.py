@@ -7,11 +7,18 @@ from sqlalchemy.orm import Session
 
 from app.models.evidence import SuspectIdentifier
 from app.schemas.evidence import SuspectIdentifierCreate, SuspectIdentifierUpdate
+from app.domain.policy import check_values
 
 
 def create_suspect(
     db: Session, incident_id: uuid.UUID, payload: SuspectIdentifierCreate
 ) -> SuspectIdentifier:
+    check_values(payload.model_dump(mode="json"))
+    if payload.source_evidence_id is not None:
+        from app.services.evidence_service import get_evidence
+        source = get_evidence(db, payload.source_evidence_id)
+        if source is None or source.incident_id != incident_id:
+            raise ValueError("Source evidence does not belong to this incident.")
     suspect = SuspectIdentifier(
         incident_id=incident_id,
         type=payload.type,
@@ -41,6 +48,7 @@ def get_suspect(db: Session, suspect_id: uuid.UUID) -> SuspectIdentifier | None:
 def update_suspect(
     db: Session, suspect: SuspectIdentifier, payload: SuspectIdentifierUpdate
 ) -> SuspectIdentifier:
+    check_values(payload.model_dump(mode="json"))
     if payload.type is not None:
         suspect.type = payload.type
     if payload.value is not None:

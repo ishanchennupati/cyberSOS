@@ -57,9 +57,9 @@ export interface Evidence {
   id: string;
   incident_id: string;
   original_filename: string;
-  mime_type: string;
+  mime_type: string | null;
   file_size: number;
-  sha256_hash: string;
+  sha256_hash: string | null;
   evidence_type: EvidenceType;
   description: string | null;
   extraction_status: ExtractionStatus;

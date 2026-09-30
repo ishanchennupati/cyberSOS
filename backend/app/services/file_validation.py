@@ -13,7 +13,6 @@ from dataclasses import dataclass
 
 from app.core.config import get_settings
 
-settings = get_settings()
 
 
 class FileValidationError(Exception):
@@ -71,7 +70,7 @@ def validate_evidence_file(
     declared MIME type, magic-byte signature, and size.
     """
 
-    max_size = max_size_bytes or settings.max_evidence_file_size_bytes
+    max_size = max_size_bytes or get_settings().max_evidence_file_size_bytes
     ext = _extension(filename)
 
     if not ext:

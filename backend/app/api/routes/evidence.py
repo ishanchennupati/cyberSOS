@@ -1,3 +1,4 @@
+"""Evidence HTTP boundary; validation, storage and verification live in services."""
 import uuid
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
@@ -5,169 +6,100 @@ from fastapi.responses import RedirectResponse, Response
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
-from app.models.evidence import EvidenceType, VerificationStatus
-from app.schemas.evidence import (
-    ComparisonResult,
-    EvidenceRead,
-    EvidenceUpdate,
-    VerifyRequest,
-    VerifyResponse,
-)
-from app.services import evidence_service, incident_service, storage_service, timeline_service
+from app.models.evidence import EvidenceType
+from app.schemas.evidence import ComparisonResult, EvidenceRead, EvidenceUpdate, VerifyRequest, VerifyResponse
+from app.services import evidence_service, incident_service, storage_service
 from app.services.file_validation import FileValidationError
+from app.services.case_access import authorize_case_resource
+from app.domain.policy import EvidenceContentKind
 
-router = APIRouter(tags=["evidence"])
-
-
-def _to_read(db: Session, evidence) -> EvidenceRead:
-    read = EvidenceRead.model_validate(evidence)
-    backend = storage_service.get_storage_backend()
-    signed = backend.signed_url(evidence.storage_path)
-    read.preview_url = signed or f"/api/v1/evidence/{evidence.id}/file"
-    return read
+router = APIRouter(tags=["evidence"], dependencies=[Depends(authorize_case_resource)])
 
 
-def _get_incident_or_404(db: Session, incident_id: uuid.UUID):
+def _incident(db, incident_id):
     incident = incident_service.get_incident(db, incident_id)
     if incident is None:
         raise HTTPException(status_code=404, detail="Incident not found")
     return incident
 
 
-def _get_evidence_or_404(db: Session, evidence_id: uuid.UUID):
+def _evidence(db, evidence_id):
     evidence = evidence_service.get_evidence(db, evidence_id)
     if evidence is None:
         raise HTTPException(status_code=404, detail="Evidence not found")
     return evidence
 
 
-@router.post(
-    "/incidents/{incident_id}/evidence",
-    response_model=EvidenceRead,
-    status_code=201,
-)
+@router.post("/incidents/{incident_id}/evidence", response_model=EvidenceRead, status_code=201)
 async def upload_evidence(
     incident_id: uuid.UUID,
     file: UploadFile = File(...),
-    evidence_type: EvidenceType = Form(...),
-    description: str | None = Form(default=None),
+    evidence_type: EvidenceType = Form(default=EvidenceType.other_document),
+    description: str | None = Form(default=None, max_length=2000),
+    content_kind: EvidenceContentKind = Form(default=EvidenceContentKind.general_document),
     db: Session = Depends(get_db),
 ) -> EvidenceRead:
-    incident = _get_incident_or_404(db, incident_id)
-
-    file_bytes = await file.read()
+    incident = _incident(db, incident_id)
     try:
-        evidence = evidence_service.create_evidence(
-            db,
-            incident,
-            filename=file.filename or "evidence",
-            mime_type=file.content_type or "application/octet-stream",
-            file_bytes=file_bytes,
-            evidence_type=evidence_type,
-            description=description,
-        )
-    except FileValidationError as exc:
+        return evidence_service.to_read(await evidence_service.upload_evidence(
+            db, incident, file, evidence_type=evidence_type, description=description, content_kind=content_kind,
+        ))
+    except (FileValidationError, ValueError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except storage_service.StorageError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
-    timeline_service.log_event(
-        db,
-        incident_id,
-        event_type="evidence_uploaded",
-        description=f"{evidence.original_filename} uploaded",
-        source_evidence_id=evidence.id,
-    )
-    return _to_read(db, evidence)
-
 
 @router.get("/incidents/{incident_id}/evidence", response_model=list[EvidenceRead])
-def list_incident_evidence(incident_id: uuid.UUID, db: Session = Depends(get_db)) -> list[EvidenceRead]:
-    _get_incident_or_404(db, incident_id)
-    items = evidence_service.list_evidence(db, incident_id)
-    return [_to_read(db, e) for e in items]
+def list_incident_evidence(incident_id: uuid.UUID, db: Session = Depends(get_db)):
+    _incident(db, incident_id)
+    return [evidence_service.to_read(e) for e in evidence_service.list_evidence(db, incident_id)]
 
 
 @router.get("/evidence/{evidence_id}", response_model=EvidenceRead)
-def get_evidence(evidence_id: uuid.UUID, db: Session = Depends(get_db)) -> EvidenceRead:
-    evidence = _get_evidence_or_404(db, evidence_id)
-    return _to_read(db, evidence)
+def get_evidence(evidence_id: uuid.UUID, db: Session = Depends(get_db)):
+    return evidence_service.to_read(_evidence(db, evidence_id))
 
 
 @router.get("/evidence/{evidence_id}/file")
 def get_evidence_file(evidence_id: uuid.UUID, db: Session = Depends(get_db)):
-    """
-    Serves the original file. If Supabase Storage is configured, redirects
-    to a freshly minted signed URL (short-lived, private bucket). Otherwise
-    streams from local disk. Never exposes a permanent public URL.
-    """
-    evidence = _get_evidence_or_404(db, evidence_id)
-    backend = storage_service.get_storage_backend()
-    signed = backend.signed_url(evidence.storage_path)
-    if signed:
-        return RedirectResponse(signed)
+    evidence = _evidence(db, evidence_id)
     try:
-        data = backend.download(evidence.storage_path)
+        data, signed_url = evidence_service.read_original(evidence)
     except storage_service.StorageError as exc:
         raise HTTPException(status_code=404, detail="File not available") from exc
-    return Response(content=data, media_type=evidence.mime_type)
+    if signed_url:
+        return RedirectResponse(signed_url)
+    return Response(content=data, media_type=evidence.mime_type or "application/octet-stream",
+                    headers={"X-Content-Type-Options": "nosniff", "Content-Disposition": "inline", "Cache-Control": "no-store"})
 
 
 @router.patch("/evidence/{evidence_id}", response_model=EvidenceRead)
-def patch_evidence(
-    evidence_id: uuid.UUID, payload: EvidenceUpdate, db: Session = Depends(get_db)
-) -> EvidenceRead:
-    evidence = _get_evidence_or_404(db, evidence_id)
-    updated = evidence_service.update_evidence(db, evidence, payload)
-    return _to_read(db, updated)
+def patch_evidence(evidence_id: uuid.UUID, payload: EvidenceUpdate, db: Session = Depends(get_db)):
+    return evidence_service.to_read(evidence_service.update_evidence(db, _evidence(db, evidence_id), payload))
 
 
 @router.delete("/evidence/{evidence_id}", status_code=204)
-def delete_evidence(evidence_id: uuid.UUID, db: Session = Depends(get_db)) -> None:
-    evidence = _get_evidence_or_404(db, evidence_id)
-    evidence_service.delete_evidence(db, evidence)
+def delete_evidence(evidence_id: uuid.UUID, db: Session = Depends(get_db)):
+    evidence_service.delete_evidence(db, _evidence(db, evidence_id))
 
 
 @router.post("/evidence/{evidence_id}/extract", response_model=EvidenceRead)
-def extract_evidence(evidence_id: uuid.UUID, db: Session = Depends(get_db)) -> EvidenceRead:
-    evidence = _get_evidence_or_404(db, evidence_id)
-    updated = evidence_service.run_extraction(db, evidence)
-    return _to_read(db, updated)
+def extract_evidence(evidence_id: uuid.UUID, db: Session = Depends(get_db)):
+    evidence = _evidence(db, evidence_id)
+    try:
+        return evidence_service.to_read(evidence_service.run_extraction(db, evidence))
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
 @router.post("/evidence/{evidence_id}/verify", response_model=VerifyResponse)
-def verify_evidence(
-    evidence_id: uuid.UUID, payload: VerifyRequest, db: Session = Depends(get_db)
-) -> VerifyResponse:
-    evidence = _get_evidence_or_404(db, evidence_id)
-    incident = incident_service.get_incident(db, evidence.incident_id)
-    if incident is None:
-        raise HTTPException(status_code=404, detail="Incident not found")
-
-    comparison = evidence_service.compare_with_incident(incident, payload.extracted_data.model_dump())
-
-    status = payload.verification_status
-    if not comparison.all_match:
-        status = VerificationStatus.needs_review
-
-    updated = evidence_service.verify_evidence(db, evidence, payload.extracted_data, status)
-
-    if status == VerificationStatus.verified:
-        timeline_service.log_event(
-            db,
-            evidence.incident_id,
-            event_type="evidence_verified",
-            description=f"{evidence.original_filename} verified",
-            source_evidence_id=evidence.id,
-        )
-
-    return VerifyResponse(evidence=_to_read(db, updated), comparison=comparison)
+def verify_evidence(evidence_id: uuid.UUID, payload: VerifyRequest, db: Session = Depends(get_db)):
+    evidence = _evidence(db, evidence_id)
+    return evidence_service.verify_for_incident(db, evidence, _incident(db, evidence.incident_id), payload)
 
 
 @router.get("/evidence/{evidence_id}/compare", response_model=ComparisonResult)
-def compare_evidence(evidence_id: uuid.UUID, db: Session = Depends(get_db)) -> ComparisonResult:
-    evidence = _get_evidence_or_404(db, evidence_id)
-    incident = incident_service.get_incident(db, evidence.incident_id)
-    if incident is None:
-        raise HTTPException(status_code=404, detail="Incident not found")
-    return evidence_service.compare_with_incident(incident, evidence.extracted_data)
+def compare_evidence(evidence_id: uuid.UUID, db: Session = Depends(get_db)):
+    evidence = _evidence(db, evidence_id)
+    return evidence_service.compare_with_incident(_incident(db, evidence.incident_id), evidence.extracted_data)
