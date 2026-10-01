@@ -19,17 +19,27 @@ const fixture = JSON.parse(fs.readFileSync(path.resolve("../backend/tests/fixtur
   });
   try {
     await page.goto(process.env.SMOKE_FRONTEND_URL || "http://127.0.0.1:3001");
-    await page.getByRole("link", { name: /Been Scammed/ }).click();
-    await page.getByRole("radio", { name: /I was tricked into sending money/ }).click();
-    await page.getByRole("button", { name: "Continue", exact: true }).click();
-    await page.getByRole("radio", { name: /UPI \/ financial fraud/ }).click();
-    await page.getByRole("button", { name: "Continue", exact: true }).click();
-    await page.getByRole("radio", { name: /Just now/ }).click();
-    await page.getByRole("button", { name: "Continue", exact: true }).click();
-    await page.getByLabel("Amount involved").fill(String(fixture.amount));
-    await page.getByRole("radio", { name: /^UPI / }).click();
-    await page.getByRole("button", { name: "Continue", exact: true }).click();
-    await page.getByRole("button", { name: "See what to do now", exact: true }).click();
+    await page.getByRole("link", { name: "Tell us what happened", exact: true }).click();
+    await page.getByRole("button", { name: "Money is gone", exact: true }).click();
+    const current = page.getByRole('region', { name: 'Current question' });
+    await current.getByRole('button', { name: 'I approved it after deception', exact: true }).click();
+    for (const prompt of [/Is money still moving/, /remote access/, /Can someone else/, /Were access credentials exposed/]) {
+      await current.getByRole('heading', { name: prompt }).waitFor();
+      await current.getByRole('button', { name: 'No', exact: true }).click();
+    }
+    await current.getByRole('heading', { name: /Approximately when/ }).waitFor();
+    await page.getByLabel('Approximate time', { exact: true }).fill('2026-10-01T12:00');
+    await current.getByRole('button', { name: 'Save answer', exact: true }).click();
+    await current.getByRole('button', { name: 'UPI', exact: true }).click();
+    await current.getByRole('button', { name: 'Completed', exact: true }).click();
+    await page.getByLabel('Amount', { exact: true }).fill(String(fixture.amount));
+    await current.getByRole('button', { name: 'Save answer', exact: true }).click();
+    await current.getByRole('heading', { name: /transaction reference/ }).waitFor();
+    await current.getByRole('button', { name: 'Not sure', exact: true }).click();
+    await current.getByRole('heading', { name: /safe supporting records/ }).waitFor();
+    await current.getByRole('button', { name: 'Not sure', exact: true }).click();
+    await current.getByRole('heading', { name: /answered the available questions/ }).waitFor();
+    await page.getByRole('link', { name: 'Review reporting draft', exact: true }).click();
     await page.waitForURL(/\/incident\/[^/]+\/result/);
     const ident = page.url().split("/").at(-2);
     const actionPlan = await (await page.request.get(`${apiUrl}/api/v1/incidents/${ident}/action-plan`)).json();
@@ -103,7 +113,7 @@ const fixture = JSON.parse(fs.readFileSync(path.resolve("../backend/tests/fixtur
     await page.setViewportSize({ width: 390, height: 844 });
     await page.getByText("Demo environment — use synthetic data only.").waitFor();
     assert.deepEqual(errors, []);
-    console.log("PASS existing browser journey: guided create/triage/actions → vault upload/private file → honest extraction failure/manual verify → description/suspect/timeline/template summary → reload persistence → delete; mobile page loaded. Incident:", ident);
+    console.log("PASS existing browser journey: conversation create/replies/actions → vault upload/private file → honest extraction failure/manual verify → description/suspect/timeline/template summary → reload persistence → delete; mobile page loaded. Incident:", ident);
   } catch (error) {
     console.error("Browser URL:", page.url());
     console.error((await page.locator("body").innerText()).slice(-4500));

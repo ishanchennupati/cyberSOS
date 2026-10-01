@@ -21,6 +21,23 @@ from datetime import datetime, timezone
 
 router = APIRouter(prefix="/incidents", tags=["incidents"], dependencies=[Depends(authorize_case_resource)])
 
+from app.schemas.conversation import ConversationRead, TurnRequest
+from app.services import conversation_service
+
+
+@router.get('/{incident_id}/conversation', response_model=ConversationRead)
+def conversation(incident_id: uuid.UUID, db: Session = Depends(get_db)):
+    return conversation_service.read(db, _get_incident(db, incident_id))
+
+
+@router.post('/{incident_id}/conversation/turns', response_model=ConversationRead)
+def conversation_turn(incident_id: uuid.UUID, payload: TurnRequest, db: Session = Depends(get_db)):
+    try:
+        return conversation_service.submit(db, _get_incident(db, incident_id), payload)
+    except ValueError as exc:
+        db.rollback()
+        raise HTTPException(422, 'Reply could not be saved. Check the structured answer and try again.') from exc
+
 
 def _get_incident(db: Session, incident_id: uuid.UUID):
     incident = incident_service.get_incident(db, incident_id)
@@ -67,6 +84,7 @@ def triage_incident(
     payload: TriageRequest,
     db: Session = Depends(get_db),
 ) -> IncidentRead:
+    conversation_service.require_conversation_turn(db, incident_id)
     incident = incident_service.get_incident(db, incident_id)
     if incident is None:
         raise HTTPException(status_code=404, detail="Incident not found")
@@ -102,6 +120,7 @@ def get_action_plan(
 
 @router.put("/{incident_id}/facts", response_model=PlanRevision)
 def update_facts(incident_id: uuid.UUID, facts: IncidentFacts, db: Session = Depends(get_db)):
+    conversation_service.require_conversation_turn(db, incident_id)
     incident = _get_incident(db, incident_id)
     if incident.incident_type.value != "financial_fraud":
         raise HTTPException(status_code=409, detail="No new playbook is implemented for this category")
@@ -135,6 +154,7 @@ def completions(incident_id: uuid.UUID, db: Session = Depends(get_db)):
 
 @router.post("/{incident_id}/plans/{plan_id}/actions/{action_id}/completion", response_model=ActionCompletion)
 def mark_complete(incident_id: uuid.UUID, plan_id: uuid.UUID, action_id: str, payload: ActionCompletionRequest, db: Session = Depends(get_db)):
+    conversation_service.require_conversation_turn(db, incident_id)
     try:
         return response_service.complete(db, _get_incident(db, incident_id), plan_id, action_id, payload)
     except LookupError as exc:

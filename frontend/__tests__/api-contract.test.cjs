@@ -49,3 +49,26 @@ test("R2 rejected deletion remains an error", async () => {
   global.fetch = async () => Response.json({ detail: "Evidence not found" }, { status: 404 });
   await assert.rejects(api.deleteEvidence("missing"), { message: "Evidence not found", status: 404 });
 });
+
+test('Phase 2 turns preserve IDs, revision, unknown values and private authority', async () => {
+  const payload = { turn_id: 'synthetic-request', expected_revision: 3, type: 'answer', field: 'ongoing_loss', value: null };
+  global.fetch = async (url, options) => {
+    assert.equal(options.credentials, 'include');
+    assert.ok(options.signal instanceof AbortSignal);
+    assert.deepEqual(JSON.parse(options.body), payload);
+    assert.ok(String(url).endsWith('/conversation/turns'));
+    return Response.json({ revision: 4 });
+  };
+  assert.equal((await api.sendConversationTurn('synthetic', payload)).revision, 4);
+});
+
+test('Phase 2 disconnect, timeout, failed save and stale state remain errors', async () => {
+  for (const error of [new TypeError('offline'), new DOMException('timeout', 'TimeoutError')]) {
+    global.fetch = async () => { throw error; };
+    await assert.rejects(api.sendConversationTurn('synthetic', {}), api.ApiError);
+  }
+  for (const status of [409, 500]) {
+    global.fetch = async () => Response.json({ detail: 'Save failed' }, { status });
+    await assert.rejects(api.sendConversationTurn('synthetic', {}), { status });
+  }
+});

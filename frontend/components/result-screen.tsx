@@ -241,7 +241,7 @@ export function ResultScreen({ plan, incidentId }: ResultScreenProps) {
       </div>
 
       <div className="mt-8 flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
-        <Link href={`/incident/start?id=${incidentId}`} className="text-sm font-medium text-calm underline-offset-2 hover:underline">
+        <Link href={`/incident/${incidentId}/conversation`} className="text-sm font-medium text-calm underline-offset-2 hover:underline">
           Go back to edit your answers
         </Link>
         <span className="hidden sm:inline text-line" aria-hidden="true">|</span>

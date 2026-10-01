@@ -146,6 +146,7 @@ export interface Incident {
 }
 
 export interface ActionItem {
+  critical: boolean;
   instruction: string;
   phase: "CONTAIN" | "PRESERVE" | "REPORT" | "FOLLOW_UP";
   priority: Urgency;

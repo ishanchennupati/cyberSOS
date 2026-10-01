@@ -57,7 +57,7 @@ export default function HomePage() {
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
               <Link href="/incident/start">
                 <Button variant="urgent" size="lg" className="w-full sm:w-auto">
-                  I&rsquo;ve Been Scammed
+                  Tell us what happened
                 </Button>
               </Link>
               <a href="#how-it-works">

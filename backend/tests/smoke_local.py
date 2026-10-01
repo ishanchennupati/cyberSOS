@@ -1,5 +1,6 @@
 """Run the existing browser journey against disposable local app servers."""
 import os
+import gc
 import socket
 import subprocess
 import sys
@@ -63,7 +64,7 @@ def main():
             processes.append(frontend)
             wait_for(f"http://127.0.0.1:{backend_port}/health", backend)
             wait_for(f"http://127.0.0.1:{frontend_port}", frontend)
-            return subprocess.run(["node", "__tests__/smoke-journey.cjs"], cwd=FRONTEND, env=env).returncode
+            return subprocess.run(["node", os.environ.get('SMOKE_JOURNEY', '__tests__/smoke-journey.cjs')], cwd=FRONTEND, env=env).returncode
         finally:
             for process in reversed(processes):
                 process.terminate()
@@ -76,6 +77,9 @@ def main():
             # Release its SQLite handles before TemporaryDirectory removes files.
             from app.db.session import engine
             engine.dispose()
+            # Closed SQLite connections can still have migration cursors held by
+            # reference cycles. Release them before Windows deletes the test file.
+            gc.collect()
 
 
 if __name__ == "__main__":

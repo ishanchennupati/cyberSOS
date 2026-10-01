@@ -11,9 +11,10 @@ not implemented. Continue using synthetic data; this is not ready for real data.
 
 ## CURRENTLY WORKING
 
-- Existing structured guided intake: financial fraud, other cyber crime and
-  women/children categories. These are limited existing flows, not comprehensive
-  response playbooks or conversational intake.
+- Durable structured financial conversation with one question at a time, early
+  deterministic actions, unknown answers, corrections, version checks and retry.
+  Other incident conversations are explicitly unsupported. Legacy nonfinancial
+  API rules remain limited existing behavior.
 - Incident create/read and typed, versioned financial response playbooks for
   approved scam payments, unauthorized transactions and unknown authorization.
   Immutable plan revisions, source snapshots and user-owned action completion.
@@ -46,10 +47,10 @@ See [backend/.env.example](backend/.env.example) for every available setting.
 
 ## PLANNED / NOT YET IMPLEMENTED
 
-Conversational/voice intake, conversation-state controller, broader cybercrime
-playbooks, Gemini, multilingual support, retention policy, account authentication
-and returning-user recovery are not implemented. Phase 1 provides the financial
-domain foundation; Phase 2 has not started. See [roadmap](docs/roadmap.md).
+Free-text AI understanding, voice, broader cybercrime playbooks, Gemini,
+multilingual support, retention policy, account authentication and returning-user
+recovery are not implemented. Phase 2 provides structured financial conversation
+over the Phase 1 domain foundation. See [roadmap](docs/roadmap.md).
 
 ## NO REAL GOVERNMENT INTEGRATION
 
@@ -183,12 +184,15 @@ See [architecture](docs/architecture.md), [sources](docs/official-sources.md) an
 | backend/app/models / schemas | Database mappings / validated API contracts |
 | backend/alembic / tests | Tracked migrations / synthetic regression fixtures and tests |
 | frontend/app | Next.js routes and page rendering |
-| frontend/features/incident-intake | Existing guided intake state, validation and API orchestration |
+| backend/app/services/conversation_service.py | Durable progression, corrections, idempotency and optimistic concurrency |
+| frontend/components/conversation.tsx | Primary conversation, actions, retry and accessible structured replies |
+| frontend/types/conversation.ts | Typed conversation requests, state, facts and history |
+| frontend/features/incident-intake | Retained legacy wizard source, unused by primary intake |
 | frontend/components / lib / types | Reusable UI / API and utilities / TypeScript contracts |
 | docs | Current decisions, verification, phase evidence and labelled historical documents |
 
-This organization preserves the existing guided flow; it does not implement
-Phase 2 conversation features. Test matrices retain financial/access/migration
+Phase 2 replaces primary wizard intake; existing drafts and evidence remain
+reachable. Test matrices retain financial/access/migration
 coverage; duplicate legacy matrix assertions are combined rather than repeated.
 Default frontend builds still use .next. CYBERSOS_BUILD_DIR=.next-check permits
 isolated verification alongside a running development server; the check directory

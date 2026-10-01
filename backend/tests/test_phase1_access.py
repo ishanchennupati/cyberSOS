@@ -2,6 +2,8 @@
 import pytest
 
 OPERATIONS = [
+    ("GET", "incidents/{case}/conversation", None),
+    ("POST", "incidents/{case}/conversation/turns", {"turn_id": "11111111-1111-4111-8111-111111111111", "expected_revision": 0, "field": "authorization", "value": "authorized"}),
     ("GET", "incidents/{case}", None),
     ("POST", "incidents/{case}/triage", {"occurred_at": "2026-10-01T12:00:00Z", "amount": 100, "payment_method": "upi"}),
     ("PATCH", "incidents/{case}/details", {}),

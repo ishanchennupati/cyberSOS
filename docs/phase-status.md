@@ -315,3 +315,52 @@ or real data removed; legitimate migrations/fixtures/locks/history retained.
 Local automated PASS. Manual/live providers NOT RUN. No Phase 2, commit or push.
 Manual check: repeat the existing synthetic financial flow and evidence operations;
 incognito private-case access must still be denied. No new product behavior to test.
+
+## Phase 2 — Stateful conversation controller + text interface
+
+Local acceptance complete on 2026-10-01. Primary intake is now “Tell us what
+happened” with the supported financial shortcut and one structured question at a
+time. No live AI understanding, Gemini, voice, new categories or Phase 3 work.
+
+The controller consumes Phase 1 typed facts and playbook question priorities;
+critical actions still come exclusively from the unchanged deterministic
+playbook. Actions appear from financial case creation, before amount/reference/
+uploads. Unknown answers are retained and suppressed; explicit corrections save
+before/after history and regenerate applicable plans.
+
+New case-authorized GET conversation and POST conversation/turns restore state
+and submit strict typed requests. Turn UUIDs are idempotency keys. Atomic revision
+checks protect all conversation mutations; turn/state/facts/plan/completion commit
+together. Legacy facts/triage/completion writes reject conversation cases.
+Migration 20261001_conversation adds state/turn tables and preserves Phase 1 rows.
+
+Frontend includes quick replies, progressive structured text fields, correction,
+15-second request timeout, visible unsaved retry, stale-state review, native
+keyboard controls, live status/focus, mobile layout and canonical resume URLs.
+Review caught and fixed draft edit links and startup retry navigation.
+
+Final evidence: full backend **254 passed**, frontend lint/types/build passed,
+**7 API contracts passed**, Phase 2 financial browser/API journey passed and
+existing evidence/draft browser journey passed. Exact commands, intermediate
+failures/corrections and manual steps are in verification.md. Fresh/prior-schema
+SQLite migrations tested. PostgreSQL/live providers/human screen reader: not run.
+Existing real-data retention/recovery limitations remain. No commit/push/deploy.
+
+## Phase 2 UX repair — Action hierarchy
+
+Restored prominent ACT NOW, server-numbered action rows and compact call/Mark done
+controls inside the conversation architecture. Current question is visually
+separate; saved history and later phases are expandable. Desktop response plan is
+sticky; mobile shows urgent actions first and provides sticky actions/question
+links. Completion keeps focus, and new immediate actions receive live announcements.
+
+No API/domain/controller/migration changes. TypeScript now exposes the existing
+ResponseAction.critical property. Two presentation tests use current golden
+playbook outputs; expanded financial journey checks ordering, separation,
+persistence, corrections, completion focus, action updates, 320px/desktop layouts
+and stale text-field protection. Test-only Windows cleanup fixed after diagnosis.
+
+Final results: **84 relevant backend tests**, **9 frontend presentation/API tests**,
+lint/types/production build and extended browser/API journey all passed. Exact
+commands and manual smoke steps are in verification.md. Visual screenshots were
+reviewed; human screen-reader/user-panic testing not run. No LLM or Phase 3.

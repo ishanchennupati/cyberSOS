@@ -49,9 +49,9 @@ def test_R2_every_frontend_operation_is_mounted_once(client):
         if not match:
             continue
         path = re.sub(r"\$\{[^}]+\}", "{}", match.group())
-        method = re.search(r'method: "(\w+)', block)
+        method = re.search(r'method: [\'"](\w+)', block)
         calls.append((method.group(1) if method else "GET", path))
-    assert len(calls) == 25
+    assert len(calls) == 27
     assert set(calls) <= mounted, set(calls) - mounted
     routes = [(r.path, m) for r in app.routes if hasattr(r, "methods") for m in r.methods]
     assert len(routes) == len(set(routes)), "Duplicate registered method/path"

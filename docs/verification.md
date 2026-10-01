@@ -1,6 +1,6 @@
 # Verification commands and recorded baselines
 
-Current developer commands/results: see "Phase 1 current verification" below.
+Current developer commands/results: see "Phase 2 UX repair verification" below.
 The Phase 0A/0B sections preserve historical evidence and failures.
 
 Executed 2026-09-30 on branch `phase-0`, HEAD `cadb2d7986b9c053a1262742a650544c283daa7c`. Shell: PowerShell. Repository root: `C:\Users\Ishan Chennupati\Downloads\cybersos`.
@@ -636,3 +636,224 @@ or real data removed; legitimate migrations/fixtures/locks/history retained.
 Local automated PASS. Manual/live providers NOT RUN. No Phase 2, commit or push.
 Manual check: repeat the existing synthetic financial flow and evidence operations;
 incognito private-case access must still be denied. No new product behavior to test.
+
+## Phase 2 current verification
+
+Executed 2026-10-01 on the existing main branch, without branch creation, commit,
+push or deployment. Synthetic temporary SQLite/evidence only. Phase 2 acceptance
+is complete locally; no Phase 3 or live understanding work was started.
+
+Final backend command, CWD repository root:
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest backend/tests -c backend/pytest.ini -q -p no:cacheprovider --tb=short
+```
+
+Exit 0: **254 passed in 11.47s**. Includes ten Phase 2 tests: progression,
+known-fact suppression, unknown answers, correction/history/branch changes, early
+actions, duplicate/reused IDs, simultaneous/stale replies, completion retry,
+refresh, rollback/retry, unsupported input and frontend/backend shape contracts.
+The private-resource matrix includes both new endpoints with missing and wrong-case
+authority. Fresh metadata parity and prior Phase 1 upgrade tests pass.
+
+Targeted commands actually run during development, CWD root:
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest backend/tests/test_phase2_conversation.py -c backend/pytest.ini -q -p no:cacheprovider --tb=short
+.\.venv\Scripts\python.exe -m pytest backend/tests/test_phase2_conversation.py backend/tests/test_migrations.py -c backend/pytest.ini -q -p no:cacheprovider --tb=short
+.\.venv\Scripts\python.exe -m pytest backend/tests/test_evidence_contract.py backend/tests/test_phase1_access.py -c backend/pytest.ini -q -p no:cacheprovider --tb=short
+```
+
+Latest targeted results: 10, 12 (before later test additions), and 81 passed,
+respectively. Initial tests failed with missing conversation routes, then passed
+after implementation. The first full run reported 246 passed / two old inventory
+assertions failed; inventories now cover the new endpoints and single/double-quoted
+frontend methods. New fixture assertions were corrected for numeric Decimal
+equivalence and existing nonfinancial create validation before the final full run.
+
+Frontend checks, CWD frontend:
+
+```powershell
+npm run lint
+node node_modules/typescript/bin/tsc --noEmit --incremental false
+node --test __tests__/api-contract.test.cjs
+```
+
+Exit 0: no lint/type errors; **7 API contracts passed**, including preserved turn
+IDs, revision, unknown values, cookie authority and failure/timeout/stale errors.
+The final build after review fixes also runs lint/type checks:
+
+```powershell
+$taskTsconfig = [IO.File]::ReadAllBytes((Join-Path (Get-Location).Path 'tsconfig.json')); $env:CYBERSOS_BUILD_DIR='.next-check'; $env:NEXT_PUBLIC_API_URL='http://localhost:8001'; try { npm run build; $taskBuildExit = $LASTEXITCODE } finally { [IO.File]::WriteAllBytes((Join-Path (Get-Location).Path 'tsconfig.json'), $taskTsconfig) }; exit $taskBuildExit
+```
+
+Exit 0: compile, lint, types, static generation and traces completed. Original
+tsconfig restored. First build warned about existing Newsreader font override
+metrics; final rebuild passed. Existing development build/server left untouched.
+
+Browser commands, CWD root, using the already installed Playwright:
+
+```powershell
+$env:PLAYWRIGHT_PACKAGE='C:/Users/Ishan Chennupati/AppData/Local/Programs/Python/Python313/Lib/site-packages/playwright/driver/package'; $env:PYTHONPATH='backend'; $env:CYBERSOS_BUILD_DIR='.next-check'; $env:SMOKE_BACKEND_PORT='8001'; $env:SMOKE_JOURNEY='__tests__/conversation-journey.cjs'; .\.venv\Scripts\python.exe backend/tests/smoke_local.py
+$env:PLAYWRIGHT_PACKAGE='C:/Users/Ishan Chennupati/AppData/Local/Programs/Python/Python313/Lib/site-packages/playwright/driver/package'; $env:PYTHONPATH='backend'; $env:CYBERSOS_BUILD_DIR='.next-check'; $env:SMOKE_BACKEND_PORT='8001'; $env:SMOKE_JOURNEY='__tests__/smoke-journey.cjs'; .\.venv\Scripts\python.exe backend/tests/smoke_local.py
+```
+
+Both exit 0. Phase 2 passes shortcut-save failure/recovery to canonical URL, early
+actions before amount/reference/upload, keyboard/focus, one active question,
+unknown, disconnected save/retry, server commit with lost response/idempotent
+retry, stale second tab, financial progression, correction, completion persistence,
+refresh, draft/edit return, narrow viewport and unauthorized API reads/writes.
+The existing journey passes conversation intake -> actions/draft -> upload/private
+preview -> honest extraction failure/manual verification -> description/suspect/
+timeline/template summary -> reload -> deletion/mobile. No page errors.
+Initial browser harness failures were an ambiguous Next route-announcer selector
+and an immediate checkbox assertion before server save; corrected to specific
+error text and server-confirmed completion. No fake successful save was added.
+
+OS temporary-directory and child-process operations initially failed under the
+sandbox; the same checks were rerun with approved escalation. Isolated migration
+and browser servers were disposed. Final git status/diff inspected for generated
+data, secrets and unrelated changes; only intended source/tests/docs remain.
+
+Manual checks (NOT RUN by a human): migrate an existing local database with
+`alembic upgrade head` from backend, start local services, select Money is gone,
+answer Not sure, correct payment approval, check an action and refresh. Open the
+same case in two tabs and verify stale replies require review. Disconnect/retry a
+reply. Verify draft edit links return to that case; test keyboard/screen reader and
+incognito access denial. Use synthetic data.
+
+PostgreSQL execution, human screen-reader checks, live providers and external
+official actions: **not run**. Existing case authority/cookie expiry assumptions
+are retained. Unsaved drafts are in memory and do not survive refresh; saved turns
+do. Retention/deletion/account recovery readiness for real citizen data remains
+outside Phase 2. No free-text AI/Gemini/voice or Phase 3 was added.
+
+## Phase 2 UX repair verification
+
+Executed 2026-10-01 on the existing main branch and uncommitted Phase 2 working
+tree. Scope: action/question presentation and interaction hierarchy only. No
+controller, API, playbook or migration changes. The existing backend critical
+field is now represented in the frontend ActionItem type. No LLM or Phase 3.
+
+Compared HEAD's result-screen.tsx with the current conversation: the old large
+urgency banner, numbered rows and compact call/source controls were clearer than
+Phase 2's flat unnumbered cards. The repair adapts those patterns into a dedicated
+ACT NOW panel, quieter later-phase disclosures and a separate active question.
+Desktop is two-column/sticky; mobile is single-column/actions-first with sticky
+actions/question links. History is available through a disclosure. Completion
+keeps focus and retains the existing self-report boundary.
+
+Commands actually run (PowerShell), CWD repository root:
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest backend/tests/test_phase2_conversation.py backend/tests/test_phase1_playbooks.py backend/tests/test_phase1_access.py -c backend/pytest.ini -q -p no:cacheprovider --tb=short
+```
+
+Exit 0: **84 passed in 6.84s**. Full backend suite was **not rerun** for this UI
+repair; relevant conversation, deterministic playbook and authority checks passed.
+
+CWD frontend:
+
+```powershell
+npm run lint
+node node_modules/typescript/bin/tsc --noEmit --incremental false
+node --test __tests__/action-panel.test.cjs __tests__/api-contract.test.cjs
+```
+
+Exit 0: lint/type checks passed; **9 tests passed** (two new presentation tests,
+seven existing API contracts). Presentation tests render actual ResponseActions
+from existing golden backend scenarios, checking distinct action sections, server
+order/numbering, one card per action, self-report completion and official sources.
+Initial new tests failed because the panel was absent, then passed after repair.
+
+Final isolated production build, CWD frontend:
+
+```powershell
+$taskTsconfig = [IO.File]::ReadAllBytes((Join-Path (Get-Location).Path 'tsconfig.json')); $env:CYBERSOS_BUILD_DIR='.next-check'; $env:NEXT_PUBLIC_API_URL='http://localhost:8001'; try { npm run build; $taskBuildExit = $LASTEXITCODE } finally { [IO.File]::WriteAllBytes((Join-Path (Get-Location).Path 'tsconfig.json'), $taskTsconfig) }; exit $taskBuildExit
+```
+
+Exit 0: compile, lint, types, static generation and traces passed. Rebuilt after
+review fixes for stale input and sticky-nav scroll offset. tsconfig restored;
+existing development build/services untouched.
+
+Final browser/API journey, CWD root:
+
+```powershell
+$env:PLAYWRIGHT_PACKAGE='C:/Users/Ishan Chennupati/AppData/Local/Programs/Python/Python313/Lib/site-packages/playwright/driver/package'; $env:PYTHONPATH='backend'; $env:CYBERSOS_BUILD_DIR='.next-check'; $env:SMOKE_BACKEND_PORT='8001'; $env:SMOKE_JOURNEY='__tests__/conversation-journey.cjs'; $env:SMOKE_SCREENSHOT_DIR=Join-Path (Get-Location).Path 'tmp/phase2-ux'; .\.venv\Scripts\python.exe backend/tests/smoke_local.py
+```
+
+Exit 0. Passed ACT NOW visible on initial mobile screen; action IDs/order/numbers
+match the current API plan; cards are outside conversation history; no duplicates;
+early actions persist into reporting questions; keyboard jumps and heading offset;
+live action announcements; completion focus/state; unknown/correction/refresh;
+320px single-column and 1280px sticky-panel layout; disconnect/idempotent retry,
+lost response, stale-tab and stale text-field protection; draft edit return; authority.
+No page errors. Existing broader evidence journey was **not rerun** for this repair.
+
+Browser regression reproduced stale amount text carrying into the transaction
+reference after 409. Resetting text on active-field changes fixed it without moving
+completion focus. Review also caught heading scroll margin missing on the element
+targeted by the mobile shortcut; heading offset is now tested with history expanded.
+
+Two browser runs passed their application checks but exited 1 during Windows
+temporary SQLite cleanup. A temporary diagnostic showed zero usable connections;
+garbage collection of remaining objects released the lock and exited 0. The runner
+now collects leftover migration objects after disposing its engine; final normal
+runner exits 0. No application backend changes were made for cleanup. Diagnostic
+script removed. Synthetic screenshots under ignored tmp/ were visually inspected:
+ACT NOW and numbered first step are prominent; active question uses a separate
+calm card; mobile shortcuts remain visible while answering.
+
+Manual repeat, using synthetic data: start Money is gone; check the prominent
+ACT NOW and numbered steps before answering. On desktop compare the question and
+sticky response plan. On mobile scroll to the question, then use actions/question
+shortcuts. Choose Not sure, mark a step done, correct payment approval and refresh.
+Verify current plan updates and completion persists; test keyboard focus after
+completion, expand explanation/source and saved history, and check at 320px.
+
+Human screen-reader testing, user study with frightened citizens and live providers
+were **not run**. The renderer retains the existing approved instructions verbatim,
+so some cards remain longer than the illustrative mockup. Later phases/history are
+collapsed by default. Existing synthetic-data, cookie expiry and in-memory unsaved
+draft limitations remain. No claim of government action or recovery is made.
+
+## Final response-plan grouping requirement (2026-10-01)
+
+Exactly four supported action groups: ACT NOW (server CONTAIN phase and server
+critical REPORT actions), PRESERVE, remaining REPORT actions, FOLLOW THROUGH
+(server FOLLOW_UP phase). No CONTAIN or UNDERSTAND section; empty groups omitted.
+Existing action.order retained within each group. Completed applicable actions
+stay visible. Questions now use neutral surface/border styling rather than green.
+No API, playbook, persistence or migration changes. The current financial playbook
+returns all four groups initially; later-group disclosures do not create new
+applicability gates or withhold approved actions. Truly later applicability
+requires a separately scoped playbook change.
+
+New component regression uses subsets of real ResponseActions to check progressive
+groups, empty plan, completed actions and shuffled-input ordering. Expanded real
+browser assertions compare each group's IDs/order to the API and check neutral
+question styling through turns, correction and refresh.
+
+Commands run from frontend, all exit 0:
+
+```powershell
+node --test __tests__/action-panel.test.cjs __tests__/api-contract.test.cjs
+npm run lint
+$taskTsconfig = [IO.File]::ReadAllBytes((Join-Path (Get-Location).Path 'tsconfig.json')); $env:CYBERSOS_BUILD_DIR='.next-check'; $env:NEXT_PUBLIC_API_URL='http://localhost:8001'; try { npm run build; $taskBuildExit = $LASTEXITCODE } finally { [IO.File]::WriteAllBytes((Join-Path (Get-Location).Path 'tsconfig.json'), $taskTsconfig) }; exit $taskBuildExit
+```
+
+10 tests passed (3 component, 7 API contract); lint clean; build includes successful
+lint/type validation and static-page generation. Initial regression failed before
+the grouping fix, then passed.
+
+Real browser journey from repository root, exit 0:
+
+```powershell
+$env:PLAYWRIGHT_PACKAGE='C:/Users/Ishan Chennupati/AppData/Local/Programs/Python/Python313/Lib/site-packages/playwright/driver/package'; $env:PYTHONPATH='backend'; $env:CYBERSOS_BUILD_DIR='.next-check'; $env:SMOKE_BACKEND_PORT='8001'; $env:SMOKE_JOURNEY='__tests__/conversation-journey.cjs'; .\.venv\Scripts\python.exe backend/tests/smoke_local.py
+```
+
+Backend unit suite not rerun for this frontend-only follow-up. Human screen-reader
+testing not run. Manual check: start a synthetic financial case; verify ACT NOW and
+expand PRESERVE, REPORT and FOLLOW THROUGH, each with only applicable steps. Mark
+done, correct payment approval and refresh: completion and current actions remain.
+Unanswered question should be neutral. Repeat at 320px using sticky shortcuts.

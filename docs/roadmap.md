@@ -7,8 +7,9 @@
 - Phase 1: typed financial facts, deterministic versioned playbooks, source
   snapshots, action completion, evidence policy and private case capabilities.
   Local acceptance evidence is recorded in phase-status.md.
-- Phase 2: deferred conversation controller/intake; NOT STARTED. No new chat,
-  AI extraction, voice, language support or broader playbooks implemented.
+- Phase 2: stateful structured financial conversation/text interface. Local
+  acceptance complete; evidence in verification.md and phase-status.md. No live
+  AI understanding, voice, language support or broader playbooks added.
 
 
 Historical documents called the evidence vault Phase 3. That numbering is obsolete

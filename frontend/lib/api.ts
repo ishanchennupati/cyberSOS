@@ -20,6 +20,18 @@ import type {
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
+import type { ConversationState, TurnRequest } from '@/types/conversation';
+
+export function getConversation(id: string) {
+  return request<ConversationState>(`/api/v1/incidents/${id}/conversation`, { signal: AbortSignal.timeout(15000), cache: 'no-store' });
+}
+
+export function sendConversationTurn(id: string, payload: TurnRequest) {
+  return request<ConversationState>(`/api/v1/incidents/${id}/conversation/turns`, {
+    method: 'POST', body: JSON.stringify(payload), signal: AbortSignal.timeout(15000),
+  });
+}
+
 export class ApiError extends Error {
   status?: number;
   constructor(message: string, status?: number) {
@@ -92,6 +104,7 @@ export function getApiHealth() {
 export function createIncident(payload: IncidentCreatePayload) {
   return request<Incident>("/api/v1/incidents", {
     method: "POST",
+    signal: AbortSignal.timeout(15000),
     body: JSON.stringify(payload),
   });
 }
