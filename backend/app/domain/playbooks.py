@@ -1,5 +1,5 @@
 """Versioned deterministic financial actions. No provider or network access."""
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from types import MappingProxyType
 
@@ -43,7 +43,11 @@ class ResponsePlaybook:
         if facts.authorization != self.authorization:
             raise ValueError("Facts do not match this playbook")
         clock = as_of.replace(tzinfo=timezone.utc) if as_of.tzinfo is None else as_of.astimezone(timezone.utc)
-        age = None if facts.occurred_at is None else clock - (facts.occurred_at.replace(tzinfo=timezone.utc) if facts.occurred_at.tzinfo is None else facts.occurred_at.astimezone(timezone.utc))
+        reported_time = facts.occurred_at
+        if self.version == '1.1.0' and reported_time is None and facts.time_window is not None:
+            # Earliest supported time is conservative; no exact timestamp is invented.
+            reported_time = facts.time_window.start
+        age = None if reported_time is None else clock - (reported_time.replace(tzinfo=timezone.utc) if reported_time.tzinfo is None else reported_time.astimezone(timezone.utc))
         urgency = Urgency.high if age is None else Urgency.critical if age.total_seconds() < 86400 else Urgency.high if age.total_seconds() < 259200 else Urgency.medium if age.total_seconds() < 604800 else Urgency.low
         ongoing = facts.ongoing_loss is True or facts.remote_access is True
         exposed = facts.account_compromised is True or facts.credentials_exposed is True
@@ -100,5 +104,23 @@ PLAYBOOKS = MappingProxyType({(p.id, p.version): p for p in (
 )})
 
 
-def evaluate(facts: IncidentFacts, *, as_of: datetime, version: str = VERSION) -> ResponsePlan:
+PLAYBOOKS = MappingProxyType({**PLAYBOOKS,
+    **{(p.id, '1.1.0'): replace(p, version='1.1.0') for p in PLAYBOOKS.values()}})
+
+
+def evaluate(facts: IncidentFacts, *, as_of: datetime, version: str | None = None) -> ResponsePlan:
+    version = version or ('1.1.0' if facts.time_window is not None or facts.kind == 'incident_understanding' else VERSION)
+    if facts.kind == 'incident_understanding':
+        # Reuse approved general preservation/report/follow-up text and sources.
+        # No bank action or financial helpline without an established loss.
+        from app.domain.facts import UnknownFinancialAuthorizationFacts
+        base = PLAYBOOKS[('financial_authorization_unknown', version)].evaluate(
+            UnknownFinancialAuthorizationFacts(), as_of=as_of)
+        applicable = bool(facts.signals) or facts.money_lost is False
+        actions = tuple(a.model_copy(update={'order': i + 1, 'minimum_facts': ('kind',),
+            'applicability': 'Reported non-financial incident or scam attempt'}) for i, a in enumerate(
+                a for a in base.actions if applicable and a.id in {'preserve_evidence', 'file_cybercrime', 'record_follow_up'}))
+        return base.model_copy(update={'playbook_id': 'incident_understanding', 'facts': facts,
+            'urgency': Urgency.medium, 'actions': actions, 'reasons': ('Working incident understanding; financial loss is not established.',),
+            'sources': tuple(s for s in base.sources if any(a.official_source_id == s.id for a in actions))})
     return PLAYBOOKS[(facts.kind, version)].evaluate(facts, as_of=as_of)

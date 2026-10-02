@@ -64,6 +64,7 @@ def validate_other_crime_details(
 
 
 class IncidentCreate(BaseModel):
+    conversation_first: bool = False
     incident_type: IncidentType = IncidentType.financial_fraud
     incident_subtype: str | None = None
     affected_person_type: str | None = None

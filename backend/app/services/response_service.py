@@ -7,7 +7,7 @@ from app.domain.facts import IncidentFacts
 from app.domain.playbooks import evaluate
 from app.domain.policy import check_values
 from app.domain.response import ActionCompletionRequest, PlanRevision, ResponsePlan
-from app.models.incident import Incident, IncidentStatus
+from app.models.incident import Incident, IncidentStatus, IncidentType
 from app.models.response import ResponsePlanRecord, ActionCompletionRecord
 
 
@@ -29,6 +29,7 @@ def record_plan(db: Session, incident: Incident, facts: IncidentFacts, *, as_of:
     plan = evaluate(facts, as_of=as_of)
     incident.plan_revision += 1
     incident.facts = facts.model_dump(mode="json")
+    incident.incident_type = IncidentType.other if facts.kind == 'incident_understanding' else IncidentType.financial_fraud
     incident.playbook_id = plan.playbook_id
     incident.playbook_version = plan.playbook_version
     incident.fact_schema_version = plan.fact_schema_version

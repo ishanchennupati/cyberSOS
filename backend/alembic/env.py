@@ -10,7 +10,7 @@ from app.models import evidence, incident, response, conversation  # noqa: F401
 config = context.config
 config.set_main_option("sqlalchemy.url", get_settings().DATABASE_URL.replace("%", "%%"))
 if config.config_file_name is not None:
-    fileConfig(config.config_file_name)
+    fileConfig(config.config_file_name, disable_existing_loggers=False)
 
 target_metadata = Base.metadata
 

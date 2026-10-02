@@ -36,7 +36,7 @@ class OfficialSource(BaseModel):
 
 class FactRequirement(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
-    field: FactField
+    field: FactField | None
     priority: FactPriority
     question: str
 

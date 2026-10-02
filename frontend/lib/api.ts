@@ -28,21 +28,49 @@ export function getConversation(id: string) {
 
 export function sendConversationTurn(id: string, payload: TurnRequest) {
   return request<ConversationState>(`/api/v1/incidents/${id}/conversation/turns`, {
-    method: 'POST', body: JSON.stringify(payload), signal: AbortSignal.timeout(15000),
+    method: 'POST', body: JSON.stringify(payload), signal: AbortSignal.timeout(65000),
+  }, (state, requestId) => {
+    const changes = state.turns?.at(-1)?.fact_changes;
+    if (changes?.understanding?.status === 'fallback') {
+      reportDiagnostic('AI_EXTRACTION_UNAVAILABLE', { requestId });
+    } else if (changes?.agent?.status === 'fallback') {
+      reportDiagnostic('AI_FOLLOW_UP_UNAVAILABLE', { requestId, status: changes.agent.http_status ?? undefined });
+    }
   });
 }
 
 export class ApiError extends Error {
   status?: number;
-  constructor(message: string, status?: number) {
+  requestId?: string;
+  category?: string;
+  constructor(message: string, status?: number, requestId?: string, category?: string) {
     super(message);
     this.name = "ApiError";
     this.status = status;
+    this.requestId = requestId;
+    this.category = category;
   }
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+export function reportDiagnostic(category: string, metadata: {
+  requestId?: string; route?: string; method?: string; status?: number;
+  durationMs?: number; location?: string; line?: number; column?: number;
+} = {}) {
+  // Only controlled metadata. Never log Error objects, bodies, facts, cookies,
+  // URLs with case IDs/queries, server detail text or provider responses.
+  console.error('[CyberSOS diagnostic]', { timestamp: new Date().toISOString(), category, ...metadata });
+}
+
+function diagnosticRoute(path: string) {
+  const route = path.split('?')[0];
+  return route.replace(/(\/api\/v1\/(?:incidents|evidence|suspects|timeline))\/[^/]+/, '$1/{incident_id}');
+}
+
+async function request<T>(path: string, init?: RequestInit, onSuccess?: (data: T, requestId: string) => void): Promise<T> {
   let response: Response;
+  const requestId = crypto.randomUUID();
+  const started = performance.now();
+  const metadata = { requestId, route: diagnosticRoute(path), method: init?.method ?? 'GET' };
   const isMultipart = typeof FormData !== "undefined" && init?.body instanceof FormData;
 
   try {
@@ -52,12 +80,18 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
       headers: {
         ...(isMultipart ? {} : { "Content-Type": "application/json" }),
         ...init?.headers,
+        'X-Request-ID': requestId,
       },
     });
-  } catch {
+  } catch (error) {
     // Network failure — backend unreachable, timeout, DNS, etc.
-    throw new ApiError("We couldn't reach CyberSOS. Check your connection and try again.");
+    const category = error instanceof Error && ['TimeoutError', 'AbortError'].includes(error.name) ? 'TIMEOUT' : 'NETWORK_ERROR';
+    reportDiagnostic(category, { ...metadata, durationMs: Math.round(performance.now() - started) });
+    throw new ApiError("We couldn't reach CyberSOS. Check your connection and try again.", undefined, requestId, category);
   }
+
+  const responseId = response.headers.get('X-Request-ID');
+  if (responseId && /^[a-f0-9-]{36}$/i.test(responseId)) metadata.requestId = responseId;
 
   if (!response.ok) {
     let detail = "Something went wrong. Please try again.";
@@ -77,11 +111,19 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     } catch {
       // response wasn't JSON — keep the default message, never surface raw text
     }
-    throw new ApiError(detail, response.status);
+    reportDiagnostic('HTTP_ERROR', { ...metadata, status: response.status, durationMs: Math.round(performance.now() - started) });
+    throw new ApiError(detail, response.status, metadata.requestId, 'HTTP_ERROR');
   }
 
   if (response.status === 204) return undefined as T;
-  return (await response.json()) as T;
+  try {
+    const data = (await response.json()) as T;
+    onSuccess?.(data, metadata.requestId);
+    return data;
+  } catch {
+    reportDiagnostic('RESPONSE_ERROR', { ...metadata, status: response.status, durationMs: Math.round(performance.now() - started) });
+    throw new ApiError('CyberSOS returned an unreadable response. Please try again.', response.status, metadata.requestId, 'RESPONSE_ERROR');
+  }
 }
 
 function resolveEvidencePreview(evidence: Evidence): Evidence {

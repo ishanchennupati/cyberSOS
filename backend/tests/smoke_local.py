@@ -31,6 +31,22 @@ def wait_for(url, process):
 
 
 def main():
+    live_ai = os.environ.get('SMOKE_LIVE_AI') == '1'
+    # Live acceptance is explicit opt-in; ordinary browser tests never use a key.
+    live_configuration = {}
+    if live_ai:
+        from app.core.config import get_settings
+        settings = get_settings()
+        live_configuration = {'GEMINI_API_KEY': settings.GEMINI_API_KEY or '',
+            'UNDERSTANDING_ENABLED': str(settings.UNDERSTANDING_ENABLED).lower(),
+            'UNDERSTANDING_PROVIDER': settings.UNDERSTANDING_PROVIDER,
+            'UNDERSTANDING_MODEL': settings.UNDERSTANDING_MODEL,
+            'UNDERSTANDING_TIMEOUT_SECONDS': str(settings.UNDERSTANDING_TIMEOUT_SECONDS),
+            'UNDERSTANDING_RETRIES': str(settings.UNDERSTANDING_RETRIES)}
+        print(f'Live acceptance: provider={settings.UNDERSTANDING_PROVIDER}, model={settings.UNDERSTANDING_MODEL}, '
+            f'key_configured={bool(settings.GEMINI_API_KEY)}, retries={settings.UNDERSTANDING_RETRIES}', flush=True)
+        if not settings.GEMINI_API_KEY or not settings.UNDERSTANDING_ENABLED:
+            return 1
     backend_port = int(os.environ.get("SMOKE_BACKEND_PORT", "8000"))
     frontend_port = int(os.environ.get("SMOKE_FRONTEND_PORT", "3001"))
     # Never terminate/reuse a user's existing application server.
@@ -46,8 +62,12 @@ def main():
                "SUPABASE_URL": "", "SUPABASE_SERVICE_ROLE_KEY": "",
                "EXTRACTION_PROVIDER": "heuristic", "SUMMARY_PROVIDER": "template",
                "ANTHROPIC_API_KEY": "", "ANTHROPIC_MODEL": "",
+               "GEMINI_API_KEY": "", "UNDERSTANDING_ENABLED": "false",
                "SMOKE_FRONTEND_URL": f"http://localhost:{frontend_port}",
                "SMOKE_API_URL": f"http://localhost:{backend_port}"}
+        env.update(live_configuration)
+        if live_ai:
+            env['SMOKE_ASGI_APP'] = 'app.main:app'
         os.environ.update(env)
         from app.core.config import get_settings
         get_settings.cache_clear()
@@ -56,7 +76,7 @@ def main():
         command.upgrade(config, "head")
         processes = []
         try:
-            backend = subprocess.Popen([sys.executable, "-m", "uvicorn", "app.main:app", "--host", "127.0.0.1", "--port", str(backend_port)],
+            backend = subprocess.Popen([sys.executable, "-m", "uvicorn", os.environ.get('SMOKE_ASGI_APP', 'app.main:app'), "--host", "127.0.0.1", "--port", str(backend_port)],
                                        cwd=BACKEND, env=env)
             processes.append(backend)
             frontend = subprocess.Popen(["node", str(FRONTEND / "node_modules/next/dist/bin/next"), "start", "--hostname", "127.0.0.1", "--port", str(frontend_port)],

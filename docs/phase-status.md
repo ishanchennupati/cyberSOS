@@ -1,5 +1,23 @@
 # Phase status
 
+## Phase 3R longer-session payment repair — 2026-10-02
+
+**PASS:** canonical payment names, bounded natural confirmation/rejection and
+question-target binding. Backend 380 tests and frontend 13 tests pass. Final live
+Gemini mobile browser passes six turns, both AI stages, amount correction and reload;
+separate live pending confirmation passes. Initial provider 429 recorded distinctly.
+See [phase3r-payment-repair.md](phase3r-payment-repair.md). Roadmap NO CHANGE;
+Phase 4 not started. Earlier acceptance did not cover the later verification loop.
+
+## Phase 3R final acceptance — 2026-10-02
+
+**PASS:** live extraction, next-move reasoning, validation and actual browser
+rendering for all four requested stories. Final B/A also passed on actual local
+development servers 3000/8000. Backend 361 tests, frontend 13 tests, lint, fresh
+build, fake-provider mobile/resume journey and live correction passed. See
+[phase3r-acceptance.md](phase3r-acceptance.md) for current runtime, exact evidence,
+remaining limitations and roadmap NO CHANGE. No Phase 4, commit or deployment.
+
 ## Step 0A — Repository audit
 
 Date: 2026-09-30. Branch: `phase-0`. HEAD: `cadb2d7986b9c053a1262742a650544c283daa7c`.
@@ -364,3 +382,105 @@ Final results: **84 relevant backend tests**, **9 frontend presentation/API test
 lint/types/production build and extended browser/API journey all passed. Exact
 commands and manual smoke steps are in verification.md. Visual screenshots were
 reviewed; human screen-reader/user-panic testing not run. No LLM or Phase 3.
+# Phase 3 — AI-first natural-language incident understanding
+
+Implemented and locally verified on 2026-10-01. Phase 4 is not started. The
+homepage and Phase 2 workspace hierarchy remain intact. Citizens can freely
+describe incidents before questions; shortcuts remain optional. New general
+cases avoid financial assumptions. Gemini interprets candidate facts only;
+application validation and versioned deterministic playbooks own actions.
+
+Official google-genai 2.26.0 is behind a small asynchronous provider interface,
+with configurable enable/provider/model, total timeout, bounded retries and
+input/output limits. The default model gemini-3.8-flash was checked against
+Google's official model list on 2026-10-01. SDK request construction was tested
+with an HTTP transport double, not a live provider. No tools or URL fetching.
+
+Strict candidates preserve multiple signals, multilingual detection, source
+turn/quote/span, extraction type, uncertainty and confidence. Explicit grounded
+facts remain unverified interpretations; uncertain/inferred candidates require
+clarification. SBI claims never establish victim bank; GPay does not establish
+rail; installation does not establish current remote access. Relative times stay
+approximate. Corrections preserve history; conflicting values remain separate.
+One focused clarification follows understanding. Rich-fact conflicts use a
+text clarification rather than introducing additional form fields.
+
+Migration 20261001_understanding expands turn text to TEXT, preserving Phase 2
+state/turn rows. Facts/candidates use existing JSON snapshots. Previous request
+shapes remain idempotently replayable. Financial 1.0.0 remains supported;
+1.1.0 handles conservative approximate intervals and the generic response branch.
+
+Acceptance: full backend **296 passed**, including all **42 Phase 3 tests**, after
+the final credential-filter repair. The affected conversation/playbook/API suite
+also passed. Frontend **10 presentation/API tests**, lint, TypeScript,
+production build, Phase 3 no-key browser journey and existing Phase 2 browser
+journey passed. Actual saved Phase 2 rows survive migration. See verification.md
+for exact commands and intermediate failures. Live Gemini, PostgreSQL execution,
+human screen-reader review and real multilingual quality evaluation: **not run**.
+Detailed new nonfinancial safety playbooks, voice and full localization remain
+outside this phase. Existing synthetic-data-only and retention limitations remain.
+# Phase 3R — AI case-agent conversation repair (2026-10-01)
+
+Implemented locally: AI next-move reasoning after canonical merge and deterministic
+playbook evaluation; seven bounded move types; case-aware recent history, unresolved
+candidates/conflicts and private evidence metadata; known/declined fact validation;
+safe application-rendered phrasing; persistent composer/visible history; natural
+corrections and conflict answers; honest provider fallback. No Phase 4 or Phase 5.
+
+The exact unauthorized ₹5,000 story passes fake-provider API and browser checks.
+Live Gemini initialized and successfully extracted/parsed/merged money lost,
+amount 5000 INR and unauthorized approval. Its full next-move acceptance remains
+**blocked by live HTTP 503 high demand/timeouts**. Later extraction calls also
+returned 503. This is not a LIVE GEMINI PASS or completed live acceptance.
+
+Acceptance: backend full suite 322 passed, final affected conversation suite 80
+passed (including 28 Phase 3R tests); frontend contract tests 10 passed; lint/types/
+production build passed; Phase 3R scripted-provider, Phase 3 no-key and Phase 2
+guided-fallback browser journeys passed. No additional Phase 3R migration; durable
+assistant state reuses immutable turn JSON. See verification.md for exact commands.
+
+
+## Phase 3R repair checkpoint (2026-10-02)
+
+Repaired known-amount question validation, natural authorization quick replies,
+retention of grounded AI wording, duplicate fallback rendering, canonical
+acknowledgements and stage-specific diagnostics. Anchored dotenv loading and added
+an explicit local launcher with backup, tracked migrations and isolated evidence.
+The screenshot's saved next-call failure was 503; the restarted user's PostgreSQL
+runtime is separately missing conversation tables. Remote DB remains unchanged.
+
+Fake-provider API/browser, no-key fallback browser and Phase 2 browser checks pass.
+Backend acceptance: 340 passed before final bounded follow-up changes; final
+changed/related suite 91 passed. Frontend contracts 10 passed, lint/build/types
+passed. Full live acceptance remains incomplete: latest actual browser Gemini
+A/B extraction 503, C malformed structured output, D 429; next moves skipped.
+No more live calls while quota is exhausted. Detailed commands and safe diagnostics
+are in verification.md; resume instructions are in phase3-understanding.md.
+Do not begin Phase 4 or claim a live pass until both AI stages, validation and
+rendering succeed.
+
+
+### Replacement-key verification (2026-10-02)
+
+After the user changed GEMINI_API_KEY and explicitly requested another check, ran
+real browser acceptance with `SMOKE_LIVE_CASES=B,A` and zero retries. Fresh test
+processes loaded the changed backend/.env; the key was never printed.
+
+- B: **LIVE FACT EXTRACTION PASS**. Provider invoked, strict parsing succeeded,
+  candidates money_lost=true, amount=5000, currency=INR and evidence_mentioned=message
+  accepted with source quotes. Authorization/rail/bank/transaction reference/exact
+  time remained unknown. "just got" stayed an unverified time candidate, not a
+  canonical timestamp. Deterministic IDs: contact_bank_unknown, call_1930,
+  preserve_evidence, file_cybercrime, record_follow_up. **LIVE NEXT-MOVE FAIL: 503**
+  before output/validation. Grounded amount acknowledgement and authorization
+  fallback rendered once; composer enabled.
+- A: **LIVE FACT EXTRACTION FAIL: 503**; next-move skipped. Honest fallback once,
+  preserved message, enabled composer, no fabricated canonical facts/actions.
+
+No 429 was observed with the replacement key during these two cases. The key is
+usable for extraction, but does not resolve provider 503 availability. No full
+LIVE GEMINI pass. No further live calls after this bounded attempt. Original
+four-case results above remain the historical first attempt; ignored screenshots
+and phase3r-live-result.json now contain the replacement-key B/A results.
+Resume at live next-move acceptance when provider capacity is available. Do not
+rerun unaffected local checks or start Phase 4.

@@ -28,7 +28,11 @@ POLICIES = {ident: EvidencePolicy() for ident in ("financial_scam_transfer", "un
 
 
 def reject_sensitive_text(text: str) -> None:
-    if re.search(r"\b(?:otp|pin|password|cvv|security code|banking credentials)\s*[:=]\s*\S+|\bcard\s*(?:number|no)\s*[:=]\s*[\d -]{13,25}", text, re.I):
+    labelled = r"\b(?:otp|pin|password|cvv|security code|banking credentials)\s*[:=]\s*\S+|\bcard\s*(?:number|no)\s*[:=]\s*[\d -]{13,25}"
+    numeric_story = r"(?:\b(?:otp|pin|cvv|security code)\b|ఓటీపీ|పిన్|ओटीपी|पिन)\s*(?:(?:is|was|hai|number|code)\s*)?[:=]?\s*\d{3,8}\b"
+    password_story = r"\bpassword\s+(?:is|was)\s+(?!(?:shared|exposed|compromised|stolen|unknown)\b)\S+"
+    card_story = r"\bcard\s*(?:number|no)\s*(?:(?:is|was)\s*)?[:=]?\s*[\d -]{13,25}"
+    if any(re.search(pattern, text, re.I) for pattern in (labelled, numeric_story, password_story, card_story)):
         raise ValueError("Remove access credentials or full card details before submitting. Never enter OTPs, PINs or passwords.")
 
 

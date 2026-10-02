@@ -857,3 +857,379 @@ testing not run. Manual check: start a synthetic financial case; verify ACT NOW 
 expand PRESERVE, REPORT and FOLLOW THROUGH, each with only applicable steps. Mark
 done, correct payment approval and refresh: completion and current actions remain.
 Unanswered question should be neutral. Repeat at 320px using sticky shortcuts.
+## Phase 3 — natural-language incident understanding (2026-10-01)
+
+Final full backend: **296 passed**, including **42 Phase 3 tests**. Deterministic
+fake outputs exercise multilingual canonical normalization, financial/authorized/
+unauthorized/unknown/no-money/account/device/mixed signals, missing facts, source
+provenance, malformed/injected output, corrections/conflicts, relative time,
+real timeout cancellation, bounded retries, no key/disabled provider, output
+limits, credential rejection, cross-case denial and pre-upgrade idempotency.
+The actual Gemini SDK request/schema is exercised via HTTP MockTransport with
+no registered tools; no live key or external AI call. Fresh schema and upgrades
+are tested, including actual stored Phase 2 state/turn preservation.
+
+Commands actually run from repository root (all final runs exit 0):
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install 'google-genai<3' --dry-run
+.\.venv\Scripts\python.exe -m pip install -r backend/requirements.txt
+.\.venv\Scripts\python.exe -m pytest backend/tests -q --tb=short
+.\.venv\Scripts\python.exe -m pytest backend/tests/test_phase3_understanding.py backend/tests/test_phase2_conversation.py backend/tests/test_migrations.py -q --tb=short
+.\.venv\Scripts\python.exe -m pytest backend/tests/test_phase3_understanding.py backend/tests/test_phase2_conversation.py backend/tests/test_phase1_playbooks.py backend/tests/test_phase1_response.py -q --tb=short
+.\.venv\Scripts\python.exe -m pytest backend/tests/test_phase3_understanding.py::test_phase2_upgrade_preserves_turns -q --tb=short
+```
+
+The full suite was first run when stable (290 passed), then rerun after the final
+shared credential-filter repair, because that repair affects evidence and other
+text paths as well as new stories. Targeted regression commands were also run
+before implementation to reproduce missing functionality and reviewer findings.
+Initial sandbox test attempts failed to access temporary directories; approved
+test runs used writable disposable databases. Generated failed-attempt directories
+were removed with verified workspace-only paths.
+
+Frontend, CWD frontend, all exit 0:
+
+```powershell
+node --test __tests__/action-panel.test.cjs __tests__/api-contract.test.cjs
+npm run lint
+npx tsc --noEmit
+$taskTsconfig=[IO.File]::ReadAllBytes((Join-Path (Get-Location).Path 'tsconfig.json')); $env:CYBERSOS_BUILD_DIR='.next-check'; $env:NEXT_PUBLIC_API_URL='http://localhost:8001'; try { npm run build; $taskBuildExit=$LASTEXITCODE } finally { [IO.File]::WriteAllBytes((Join-Path (Get-Location).Path 'tsconfig.json'), $taskTsconfig) }; exit $taskBuildExit
+```
+
+**10 presentation/API tests passed**, lint and TypeScript passed; production
+build passed with separate build output and original tsconfig preserved. The final
+build was repeated after the nullable rich-fact question contract and initial
+story copy adjustment. No homepage redesign.
+
+Real browser/API journeys, repository root, final runs exit 0:
+
+```powershell
+$env:PLAYWRIGHT_PACKAGE='C:/Users/Ishan Chennupati/AppData/Local/Programs/Python/Python313/Lib/site-packages/playwright/driver/package'; $env:PYTHONPATH='backend'; $env:CYBERSOS_BUILD_DIR='.next-check'; $env:SMOKE_BACKEND_PORT='8001'; $env:SMOKE_JOURNEY='__tests__/understanding-journey.cjs'; .\.venv\Scripts\python.exe backend/tests/smoke_local.py
+$env:PLAYWRIGHT_PACKAGE='C:/Users/Ishan Chennupati/AppData/Local/Programs/Python/Python313/Lib/site-packages/playwright/driver/package'; $env:PYTHONPATH='backend'; $env:CYBERSOS_BUILD_DIR='.next-check'; $env:SMOKE_BACKEND_PORT='8001'; $env:SMOKE_JOURNEY='__tests__/conversation-journey.cjs'; .\.venv\Scripts\python.exe backend/tests/smoke_local.py
+```
+
+New journey: unrestricted multilingual story text, >256-character storage, failed
+submission/retry, no-key honesty, one current question, progressive financial
+actions after clarification, correction story retention without fake extraction,
+reload, 320px layout and no financial actions on a no-money case. Existing Phase 2
+journey: early actions/order/grouping, correction, completion focus, unknown,
+disconnect/retry/lost response, stale state, mobile/desktop and private authority.
+No page errors. The initial new journey failed on an overly exact text selector
+for the PRESERVE disclosure (whose label includes a count); its corrected group
+selector passed. Disposable servers/database/files are cleaned by the runner.
+
+Review caught two reproduced and fixed issues: raw pre-upgrade request JSON did
+not include new defaults, breaking idempotent retries; unbounded relative-hour
+arithmetic could overflow. Final review also added rich-fact conflict clarification
+and natural-story credential rejection. The credential filter is conservative
+pattern matching, not comprehensive sensitive-data detection.
+
+Live Gemini interpretation, live multilingual quality, PostgreSQL execution,
+human screen-reader checks and real-citizen usability: **not run**. Existing broad
+evidence browser journey: **not rerun** (backend evidence tests passed). No provider
+success or external government/bank action is claimed. Manual synthetic scenarios
+and configuration are in phase3-understanding.md. No Phase 4, commit, push or deploy.
+# Phase 3R acceptance and live-provider results (2026-10-01)
+
+All backend tests use disposable migrated SQLite/storage and explicit no-key test
+configuration. Root `.venv` Python is used; backend's other environment is not used.
+Commands below were actually run from backend:
+
+```powershell
+..\.venv\Scripts\python.exe -m pytest tests -q
+..\.venv\Scripts\python.exe -m pytest tests/test_phase3r_case_agent.py tests/test_phase3_understanding.py tests/test_phase2_conversation.py -q
+..\.venv\Scripts\python.exe -m tests.live_case_agent
+```
+
+Full suite: **322 passed**. Final affected checks after the last conversation
+repairs: **80 passed**, including **28 Phase 3R tests**. The two newly added
+affirmative/uncertainty tests were included in this final targeted run, not in the
+earlier full count. Initial acceptance found local CASE_COOKIE_SECURE=false leaking
+from `.env` into tests; conftest now explicitly sets true. No production cookie
+policy was weakened. Initial temporary-directory ACL failures used approved
+test runs; sandbox Node tests also required approval for process spawning.
+
+Frontend, from frontend:
+
+```powershell
+node --test __tests__/action-panel.test.cjs __tests__/api-contract.test.cjs
+npm run lint
+$taskTsconfig = [IO.File]::ReadAllBytes((Join-Path (Get-Location).Path 'tsconfig.json')); $env:CYBERSOS_BUILD_DIR='.next-check'; $env:NEXT_PUBLIC_API_URL='http://localhost:8001'; try { npm run build; $taskBuildExit=$LASTEXITCODE } finally { [IO.File]::WriteAllBytes((Join-Path (Get-Location).Path 'tsconfig.json'), $taskTsconfig) }; exit $taskBuildExit
+```
+
+Contract tests **10 passed**, lint clean, production build exit 0 including
+lint/type checking. Build repeated only after completion-focus repair. No standalone
+Phase 3R `npx tsc` run; Next build ran the type check. User tsconfig was preserved.
+
+Browser commands from backend, using isolated real API/database/browser servers:
+
+```powershell
+$env:CYBERSOS_BUILD_DIR='.next-check'
+$env:SMOKE_BACKEND_PORT='8001'
+$env:SMOKE_FRONTEND_PORT='3001'
+$env:PLAYWRIGHT_PACKAGE='C:/Users/Ishan Chennupati/AppData/Local/Programs/Python/Python313/Lib/site-packages/playwright/driver/package'
+$env:SMOKE_ASGI_APP='tests.case_agent_smoke_app:app'
+$env:SMOKE_JOURNEY='__tests__/case-agent-journey.cjs'
+..\.venv\Scripts\python.exe -m tests.smoke_local
+# The fallback journeys ran in separate PowerShell invocations, without SMOKE_ASGI_APP.
+$env:SMOKE_JOURNEY='__tests__/understanding-journey.cjs'
+..\.venv\Scripts\python.exe -m tests.smoke_local
+$env:SMOKE_JOURNEY='__tests__/conversation-journey.cjs'
+..\.venv\Scripts\python.exe -m tests.smoke_local
+```
+
+Each journey passed. Scripted-provider journey covers exact reproduction, same-turn
+approved actions, visible assistant/user history, composer on all turns, approximate
+time, amount correction history, device signal, message-based quick reply, optional
+safe evidence intent, reload and 320px layout. No-key journey verifies honest
+failure, multilingual original text, retries and progressive fallback. Phase 2
+journey verifies action ordering, keyboard/focus, saved completions, stale-tab
+conflicts and case authorization. An initial focus assertion raced the last
+fallback save after the old completion heading was removed; the test now waits
+for that question to disappear. Completion focus is also explicitly restored.
+
+Live Gemini is **not a pass**. Provider/model: gemini / gemini-3.8-flash,
+google-genai 2.26.0, configured credential detected (never printed). Original SDK
+8-second deadline was rejected (minimum 10 seconds); complex extraction schema
+also received HTTP 400. Compact transport grammar plus low thinking allowed live
+extraction and strict parsing. Accepted candidates, with exact source quotes:
+
+- money_lost=true, from “₹5,000 left my account”
+- amount=5000, from “5,000”
+- currency=INR, from “₹”
+- authorization=unauthorized, from “without my approval”
+
+Canonical kind became unauthorized_financial_transaction; exact time and transaction
+reference remained null, rail unknown. Deterministic action IDs were
+contact_bank_unauthorized, call_1930, preserve_evidence, file_cybercrime,
+record_follow_up. AI next-move then timed out or returned ServerError HTTP 503.
+A minimal next-move diagnostic confirmed Google's high-demand response. Final live
+run returned 503 during extraction itself; preserved message, unknown facts, no
+invented actions, next_move=null and honest money-loss guided fallback. Synthetic
+probe script exits 1 unless both live stages and required facts pass. It never
+uses the real case database. No silent alternate model or paid-provider upgrade.
+
+Live multilingual quality, PostgreSQL execution and human/screen-reader review:
+**not run**. Phase 3R acceptance remains pending full live provider success.
+`git diff --check` passed; safe content check of 39 changed/untracked source files
+found no configured Gemini key and no database/upload artifacts. backend/.env is
+ignored; existing key/DB configuration was preserved, deadline set to 20 seconds.
+
+
+## Phase 3R completion repair - 2026-10-02
+
+Read AGENTS.md; inspected the implementation before editing. Saved local SQLite
+turn diagnostics conclusively identify the screenshot next-move failure as HTTP
+503, following successful extraction/accepted money_lost and amount candidates.
+The backend the user restarted uses backend/.env PostgreSQL, revision
+20260824_urgency_metadata, without conversation tables; case creation returns 500.
+Remote schema was inspected read-only. No remote migration or credential change.
+
+Added failing regressions before repair: 28 existing tests passed and 10 new
+regressions failed for wording/grounding/quick-reply/diagnostics defects. After
+repair, review reproduced three additional unsafe wording bypasses; all now have
+passing regressions. Existing Phase 1 deterministic actions remain authoritative.
+
+Commands/results actually run (backend commands from backend unless stated):
+
+- `..\.venv\Scripts\python.exe -m pytest tests -q`: **340 passed in 35.39s** at
+  stable acceptance checkpoint. After subsequent bounded diagnostics/grounding,
+  grounded acknowledgement and launcher test changes, the affected suite below
+  was rerun; the complete suite was not redundantly rerun.
+- `..\.venv\Scripts\python.exe -m pytest tests/test_phase3r_case_agent.py tests/test_phase3_understanding.py tests/test_config.py -q`:
+  final **91 passed in 16.67s**. Covers canonical exact debit, amount-aware wording,
+  natural quick replies, correction/conflict, multilingual doubles, mixed signals,
+  unknown currency, 503/timeout/malformed/rejection diagnostics, secret-free error
+  metadata, canonical AI acknowledgement retention, local backup/storage isolation.
+- `npm run lint` (frontend): no warnings/errors.
+- `npm run build` with `CYBERSOS_BUILD_DIR=.next-check` and
+  `NEXT_PUBLIC_API_URL=http://localhost:8001`: passed production build/types. Saved
+  and restored tsconfig bytes around Next's generated include adjustment.
+- `npx tsc --noEmit` after the additive diagnostic TypeScript contract: passed.
+- `node --test __tests__/api-contract.test.cjs __tests__/action-panel.test.cjs`:
+  **10 passed**. Initial sandbox EPERM prevented worker spawning; unrestricted
+  retry passed, not an application failure.
+- `..\.venv\Scripts\python.exe -m tests.smoke_local`, with
+  `CYBERSOS_BUILD_DIR=.next-check`, `SMOKE_BACKEND_PORT=8001`,
+  `SMOKE_FRONTEND_PORT=3001`, and the installed Playwright package path:
+  - `SMOKE_ASGI_APP=tests.case_agent_smoke_app:app`,
+    `SMOKE_JOURNEY=__tests__/case-agent-journey.cjs`: **FAKE PROVIDER browser PASS**.
+    Exact debit, grounded amount question, optional evidence, ambiguous "5000
+    gone", authorization quick replies, natural follow-ups/correction/device
+    signal, permanent composer, reload and 320px width. One test initially checked
+    a DOM count before the new route finished rendering; adding a readiness wait
+    fixed the test race.
+  - `SMOKE_ASGI_APP=app.main:app`,
+    `SMOKE_JOURNEY=__tests__/understanding-journey.cjs`: **no-key browser PASS**.
+    Story saved, fallback acknowledgement/question rendered once, optional controls,
+    normal composer, retry, no invented facts, no-money case and mobile.
+  - `SMOKE_JOURNEY=__tests__/conversation-journey.cjs`: **Phase 2 browser PASS**.
+    Deterministic ordering, early actions, corrections, stale-tab/idempotent retry,
+    focus, mobile/desktop, action completion and private authorization preserved.
+- Live: same smoke command, `SMOKE_LIVE_AI=1`,
+  `SMOKE_JOURNEY=__tests__/live-case-agent-journey.cjs`: **LIVE GEMINI FAIL**.
+  Real browser/API, actual configured gemini / gemini-3.8-flash, key present,
+  20-second per-stage deadline, zero retries, migrated disposable local DB.
+  B and A extraction HTTP 503; C provider invocation succeeded but strict output
+  parsing failed; D extraction HTTP 429 quota. All next-move calls skipped. All
+  four fallback interactions rendered once with enabled composer. No accepted
+  candidate/current financial facts or action IDs were fabricated. Raw output not
+  retained; exact malformed field C is unresolved. Future attempts record safe
+  Pydantic location/type diagnostics. Live extraction and live next-move acceptance
+  have **not passed in this repair**. No further live requests after quota failure.
+  Synthetic result/screenshots are ignored under backend/tmp.
+- `git diff --check`: passed; source status inspected. Existing user changes kept;
+  dotenv, databases, evidence, backups and live artifacts remain ignored.
+
+Manual runtime: stop the old backend, then from repository root run
+`.\.venv\Scripts\python.exe backend/run_local.py`; leave frontend on 3000.
+The launcher selects/backs up/migrates local SQLite and disables cloud storage;
+it still loads Gemini settings from backend/.env. When quota is available, retry
+live acceptance (instructions in phase3-understanding.md). A usable extraction
+followed by fallback is not a full live case-agent pass. Human screen-reader and
+live multilingual-quality checks remain not run. No Phase 4/5 implementation.
+
+
+### Replacement-key verification (2026-10-02)
+
+After the user changed GEMINI_API_KEY and explicitly requested another check, ran
+real browser acceptance with `SMOKE_LIVE_CASES=B,A` and zero retries. Fresh test
+processes loaded the changed backend/.env; the key was never printed.
+
+- B: **LIVE FACT EXTRACTION PASS**. Provider invoked, strict parsing succeeded,
+  candidates money_lost=true, amount=5000, currency=INR and evidence_mentioned=message
+  accepted with source quotes. Authorization/rail/bank/transaction reference/exact
+  time remained unknown. "just got" stayed an unverified time candidate, not a
+  canonical timestamp. Deterministic IDs: contact_bank_unknown, call_1930,
+  preserve_evidence, file_cybercrime, record_follow_up. **LIVE NEXT-MOVE FAIL: 503**
+  before output/validation. Grounded amount acknowledgement and authorization
+  fallback rendered once; composer enabled.
+- A: **LIVE FACT EXTRACTION FAIL: 503**; next-move skipped. Honest fallback once,
+  preserved message, enabled composer, no fabricated canonical facts/actions.
+
+No 429 was observed with the replacement key during these two cases. The key is
+usable for extraction, but does not resolve provider 503 availability. No full
+LIVE GEMINI pass. No further live calls after this bounded attempt. Original
+four-case results above remain the historical first attempt; ignored screenshots
+and phase3r-live-result.json now contain the replacement-key B/A results.
+Resume at live next-move acceptance when provider capacity is available. Do not
+rerun unaffected local checks or start Phase 4.
+
+## AI availability and approved diagnostics repair - 2026-10-02
+
+This checkpoint supersedes the incomplete live results above. The user authorized
+the hosted PostgreSQL upgrade and diagnostic design. Four pending tracked migrations
+were applied atomically to `20261001_understanding`; all ORM tables/columns and unchanged
+empty incident/evidence counts were verified. Live hosted-backed API smoke returned
+create 201, read/conversation 200, unauthenticated 404; the synthetic case was removed.
+This repair adds no migration or startup schema patch.
+
+Saved screenshot-turn metadata proved successful AI extraction with intermittent
+follow-up/correction HTTP 503. The connection and key existed. Live model discovery
+verified the chosen `gemini-3.5-flash-lite` endpoint. Official model/pricing/rate-limit
+documentation was checked; the ignored local dotenv model now uses that endpoint.
+Later live checks exposed invalid candidate types, source/currency ambiguity and
+incompatible follow-up proposals. Provider grammar now binds field/value types;
+instructions clarify grounding, currency, mixed signals and supported questions/replies.
+Validators and deterministic critical actions remain authoritative. The configured
+single retry applies only to transient failures inside the original stage deadline.
+
+Added content-free backend JSON terminal/rotating-file logs, correlated UUID request
+IDs, HTTP/AI-stage/retry/programmatic diagnostics, and browser API/AI/runtime/render
+diagnostics. Review-found raw Uvicorn access logging and partial-stream exception-chain
+issues were fixed with regressions. Live Windows rotation conflicts were fixed by
+PID-specific files. Each process is bounded to three 1 MB files; old process files
+can accumulate and should be deleted when no longer useful. Stories, evidence, raw
+provider output, exception messages, SQL parameters, credentials and private IDs are
+excluded from these diagnostic events.
+
+Commands actually run (root unless marked otherwise):
+
+- `.\.venv\Scripts\python.exe -m pytest backend/tests -c backend/pytest.ini -q -p no:cacheprovider --tb=short`,
+  with `DIAGNOSTICS_LOG_DIR=''`: final **353 passed in 32.86s**. A prior full run
+  exposed an existing launcher-test environment leak; scoped monkeypatch cleanup
+  fixed it. Targeted diagnostic/AI suite also passed **97 tests** after retry changes.
+- `node --test __tests__/api-contract.test.cjs __tests__/action-panel.test.cjs`
+  (frontend): **13 passed**.
+- `npm run lint` (frontend): passed, no warnings/errors.
+- `npm run build` (frontend), with `CYBERSOS_BUILD_DIR=.next-check` and
+  `NEXT_PUBLIC_API_URL=http://localhost:8001`: production build/types passed. Restored
+  original tsconfig bytes after Next's generated include adjustment. Initial sandbox
+  EPERM and temporary-SQLite permission failures passed on approved unrestricted retries.
+- `..\.venv\Scripts\python.exe -m tests.smoke_local` (backend), with
+  `CYBERSOS_BUILD_DIR=.next-check`, `SMOKE_BACKEND_PORT=8001`,
+  `SMOKE_FRONTEND_PORT=3001`, installed `PLAYWRIGHT_PACKAGE`, and:
+  - `SMOKE_JOURNEY=__tests__/diagnostics-journey.cjs`: **browser diagnostic PASS**.
+    HTTP 503 correlation, runtime/rejection categories and no synthetic secret leakage.
+  - `SMOKE_LIVE_AI=1`, `SMOKE_JOURNEY=__tests__/live-case-agent-journey.cjs`:
+    final **LIVE GEMINI browser B,A,C,D PASS** with real extraction, accepted next
+    moves, strict validation and mobile rendering. B ambiguous debit/message, A explicit
+    unauthorized debit, C claimed SBI/GPay scam, D AnyDesk plus financial loss. One
+    transient failure recovered through `ai_retry`; no rotation errors. Earlier attempts
+    honestly failed on rejected/malformed output and 503. An initial harness attempt
+    used a build targeting 8000 instead of disposable 8001; rebuilding with the explicit
+    API URL corrected that test setup. Live scripts now respect configured retries (1).
+- `..\.venv\Scripts\python.exe -m tests.live_case_agent` (backend), with
+  `DIAGNOSTICS_LOG_DIR=''`: final **LIVE GEMINI PASS / LIVE CORRECTION PASS**. The
+  same synthetic case changed 5000 to 4500, preserved original turn/correction history,
+  and produced a validated AI follow-up. An earlier zero-retry correction saved the
+  correct facts/history but its follow-up returned 503; that was not counted as a pass.
+- Running development API `/health`: 200; startup diagnostic confirms configured
+  model, key-present boolean, 20-second stage deadline and retries=1.
+- Read-only review of diagnostics, provider grammar and retries: no remaining material
+  findings. Final diff/status/ignore checks performed; secrets and synthetic artifacts
+  remain ignored, unrelated user changes preserved. No commit, push, deployment or
+  Phase 4/5 implementation.
+
+Live multilingual-quality review, human screen-reader testing and sustained provider
+reliability evaluation: **not run**. Successful bounded checks do not guarantee free-tier
+capacity. Continue using synthetic data: Google's free tier may use submitted content
+to improve its products. Refresh the workspace and send only the natural correction
+`Sorry, the amount was ₹4,500.` when manually checking correction behavior.
+
+## Repeated answered-fact verification repair - 2026-10-02
+
+Latest user logs showed two follow-up rejections `VERIFY_INFORMATION / ALREADY_ANSWERED`,
+with successful provider invocation/parsing. A read-only query of bounded turn metadata
+(no stories, values, case IDs or evidence output) reproduced the causal sequence:
+ongoing-loss clarification -> Not sure with a needs_review candidate -> that same
+candidate offered on the following turn. No hosted case was written or deleted.
+
+Fixed eligibility at its source: calculate answered/declined fields before unresolved
+candidate selection, exclude answered uncertainty from active verification, preserve
+historical interpretation and genuine conflicts. Added a case-specific Gemini JSON
+grammar for eligible ASK/VERIFY/RESOLVE fields, and aligned the prompt. AI still chooses
+the next move and wording; the existing validator and deterministic playbooks remain
+authoritative. No API, migration or frontend behavior contract changed.
+
+Verification actually run:
+
+- New regressions first failed (2 failures): the stale candidate caused fallback and
+  provider grammar lacked case-specific eligibility. After repair,
+  `.\.venv\Scripts\python.exe -m pytest backend/tests/test_phase3r_case_agent.py backend/tests/test_phase3_understanding.py -c backend/pytest.ini -q -p no:cacheprovider --tb=short`
+  with `DIAGNOSTICS_LOG_DIR=''`: **89 passed**.
+- `.\.venv\Scripts\python.exe -m pytest backend/tests -c backend/pytest.ini -q -p no:cacheprovider --tb=short`
+  with the same log setting: **355 passed in 34.28s**. Correction/conflict, authorization,
+  no-key fallback, cross-case security and diagnostics tests remain passing.
+- From backend, `..\.venv\Scripts\python.exe -m tests.live_declined_followup`, with
+  `DIAGNOSTICS_LOG_DIR=''`: **LIVE FOLLOW-UP PASS**. Disposable SQLite case; synthetic
+  extraction fixture guarantees the exact uncertain ongoing-loss condition. Both
+  subsequent decisions used real configured Gemini: ASK_CLARIFICATION(remote_access),
+  then ACKNOWLEDGE_AND_WAIT. Both validated, neither re-verified ongoing loss; unknown
+  and historical candidate were preserved. This is not a claim of live extraction.
+- From backend, `..\.venv\Scripts\python.exe -m tests.live_case_agent`, with the same
+  log setting: initial live story/next move **PASS**, automatic amount correction
+  **FAIL**. Correction extraction succeeded but left an unresolved amount conflict;
+  Gemini returned a valid RESOLVE_CONFLICT rather than silently changing the amount.
+  Original history remained. This bounded broader check does not prove automatic
+  correction reliability and was not rerun merely to obtain a passing result.
+- Read-only review found no material issues; its minor prompt/schema mismatch about
+  verification versus conflict was corrected. `git diff --check`: passed. Local
+  diagnostic/live artifacts remain ignored; pre-existing changes preserved.
+
+Frontend lint/build/browser acceptance: **not rerun**, since no frontend or API response
+shape changed. No migration, new phase, commit, deployment or paid tier was introduced.
+Old fallback turns remain historical records; the next turn on an existing case uses
+the repaired eligibility rules. Live provider availability and broader extraction
+quality remain independent limitations.

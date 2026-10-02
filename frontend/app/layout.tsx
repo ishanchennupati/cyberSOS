@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Newsreader, Inter, IBM_Plex_Mono } from "next/font/google";
 import "./globals.css";
+import RuntimeDiagnostics from '@/components/runtime-diagnostics';
 
 const display = Newsreader({
   subsets: ["latin"],
@@ -32,7 +33,7 @@ export default function RootLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en" className={`${display.variable} ${sans.variable} ${mono.variable}`}>
-      <body>{children}</body>
+      <body><RuntimeDiagnostics />{children}</body>
     </html>
   );
 }

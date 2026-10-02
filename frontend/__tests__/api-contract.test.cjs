@@ -15,6 +15,56 @@ const api = apiModule.exports;
 const originalFetch = global.fetch;
 afterEach(() => { global.fetch = originalFetch; });
 
+test('Diagnostics correlate HTTP errors without logging case data', async () => {
+  const captured = [];
+  const original = console.error;
+  console.error = (...args) => captured.push(args);
+  try {
+    global.fetch = async (_url, options) => {
+      assert.match(options.headers['X-Request-ID'], /^[a-f0-9-]{36}$/);
+      return Response.json({ detail: 'synthetic-private-server-detail' }, {
+        status: 500, headers: { 'X-Request-ID': options.headers['X-Request-ID'] },
+      });
+    };
+    await assert.rejects(api.sendConversationTurn('synthetic-case-id', { text: 'synthetic-private-story' }),
+      error => error.status === 500 && !!error.requestId);
+    const serialized = JSON.stringify(captured);
+    assert.ok(serialized.includes('HTTP_ERROR'));
+    assert.ok(serialized.includes('/api/v1/incidents/{incident_id}/conversation/turns'));
+    assert.ok(!serialized.includes('synthetic-private'));
+    assert.ok(!serialized.includes('synthetic-case-id'));
+  } finally { console.error = original; }
+});
+
+test('Diagnostics distinguish timeouts and malformed success responses', async () => {
+  const captured = [];
+  const original = console.error;
+  console.error = (...args) => captured.push(args);
+  try {
+    global.fetch = async () => { throw new DOMException('synthetic-private', 'TimeoutError'); };
+    await assert.rejects(api.getApiHealth(), error => error.category === 'TIMEOUT');
+    global.fetch = async () => new Response('synthetic-private-invalid-json');
+    await assert.rejects(api.getApiHealth(), error => error.category === 'RESPONSE_ERROR');
+    assert.ok(JSON.stringify(captured).includes('RESPONSE_ERROR'));
+    assert.ok(!JSON.stringify(captured).includes('synthetic-private'));
+  } finally { console.error = original; }
+});
+
+test('AI fallback is diagnosed even when the API successfully saves the turn', async () => {
+  const captured = [];
+  const original = console.error;
+  console.error = (...args) => captured.push(args);
+  try {
+    global.fetch = async () => Response.json({ turns: [{ text: 'synthetic-private-story', fact_changes: {
+      understanding: { status: 'understood' }, agent: { status: 'fallback', http_status: 503 },
+    } }] });
+    const state = await api.sendConversationTurn('synthetic-private-case', {});
+    assert.equal(state.turns.length, 1);
+    assert.ok(JSON.stringify(captured).includes('AI_FOLLOW_UP_UNAVAILABLE'));
+    assert.ok(!JSON.stringify(captured).includes('synthetic-private'));
+  } finally { console.error = original; }
+});
+
 test("R4 private requests carry cookies without exposing secrets in URLs", async () => {
   global.fetch = async (url, options) => {
     assert.equal(options.credentials, "include");

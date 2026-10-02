@@ -11,10 +11,12 @@ not implemented. Continue using synthetic data; this is not ready for real data.
 
 ## CURRENTLY WORKING
 
-- Durable structured financial conversation with one question at a time, early
-  deterministic actions, unknown answers, corrections, version checks and retry.
-  Other incident conversations are explicitly unsupported. Legacy nonfinancial
-  API rules remain limited existing behavior.
+- Story-first natural-language incident conversation, with optional financial
+  shortcut, multilingual AI candidate understanding, provenance, corrections,
+  conflicts and one useful clarification at a time. Critical actions remain
+  deterministic. No-key/provider failure uses honest progressive clarification.
+  Account/device/threat/scam signals are provisional; detailed nonfinancial safety
+  playbooks remain limited, with general preservation/reporting handoffs.
 - Incident create/read and typed, versioned financial response playbooks for
   approved scam payments, unauthorized transactions and unknown authorization.
   Immutable plan revisions, source snapshots and user-owned action completion.
@@ -41,16 +43,22 @@ Supabase private storage and existing Anthropic extraction/summary adapters are
 opt-in. Their SDKs are not included in baseline requirements; configuration alone
 does not establish provider availability. Live providers are not verified. Missing
 credentials permit local storage, heuristic extraction/manual correction and
-template summary fallback. Gemini is intended for future explicitly scoped work;
-it is not integrated. AI does not control current deterministic action selection.
+template summary fallback. Phase 3 integrates Gemini text understanding using the
+official google-genai SDK, disabled safely by missing credentials. Configure
+GEMINI_API_KEY and UNDERSTANDING_* settings to enable interpretation and case-aware
+next moves. Text and bounded case context are sent to the configured provider; use
+synthetic data. Live extraction passed for the ₹5,000 unauthorized-debit example;
+full live next-move acceptance remains blocked by Gemini high-demand failures.
+Multilingual quality was tested with doubles, not live. AI does not control
+deterministic action selection. See [Phase 3/3R notes](docs/phase3-understanding.md).
 See [backend/.env.example](backend/.env.example) for every available setting.
 
 ## PLANNED / NOT YET IMPLEMENTED
 
-Free-text AI understanding, voice, broader cybercrime playbooks, Gemini,
-multilingual support, retention policy, account authentication and returning-user
-recovery are not implemented. Phase 2 provides structured financial conversation
-over the Phase 1 domain foundation. See [roadmap](docs/roadmap.md).
+Voice, full UI localization, broader cybercrime safety playbooks, retention policy,
+account authentication and returning-user recovery are not implemented. Phase 3
+adds text understanding to the Phase 1/2 foundations. Phase 4 is not started.
+See [roadmap](docs/roadmap.md).
 
 ## NO REAL GOVERNMENT INTEGRATION
 
@@ -82,15 +90,19 @@ no local file exists. DATABASE_URL is required; temporary SQLite works locally,
 so PostgreSQL/cloud credentials are not required for development verification.
 All settings are documented in backend/.env.example and frontend/.env.example.
 
-Backend start, CWD backend (set a synthetic local DB/storage directory):
+Backend start, CWD repository root (explicit synthetic local database/storage;
+Gemini configuration still comes from `backend/.env`):
 
 ```powershell
-$env:DATABASE_URL='sqlite:///./local.sqlite'
-$env:LOCAL_STORAGE_ROOT='./evidence'
-$env:CASE_COOKIE_SECURE='false' # HTTP localhost with synthetic data only
-..\.venv\Scripts\python.exe -m alembic upgrade head
-..\.venv\Scripts\python.exe -m uvicorn app.main:app --reload --port 8000
+.\.venv\Scripts\python.exe backend/run_local.py
 ```
+
+Stop an existing backend on port 8000 before using the launcher. It selects
+`backend/local.sqlite` explicitly, backs up existing local data to ignored
+`backend/tmp`, applies tracked migrations, uses local evidence storage and HTTP
+development cookies. It never migrates the remote database from `.env`. Settings
+load `backend/.env` independently of the launch directory; shell environment
+variables still take precedence and require a process restart when changed.
 
 Frontend start in a second terminal, CWD frontend:
 
@@ -106,7 +118,56 @@ used instead of SQLite; do not apply unverified upgrades to real data casually.
 
 ## Migrations and verification
 
-Startup performs no DDL. Head is 20261001_response_foundation; the first baseline
+### AI diagnostics and free-tier development
+
+Phase 3R uses two provider stages: candidate fact extraction, then a case-aware
+conversational proposal after validation and deterministic playbook evaluation.
+HTTP 200 means the turn was saved; it does not prove either AI stage succeeded.
+Fallback preserves the case but is not the intended normal AI conversation.
+
+The current development default is `gemini-3.5-flash-lite`. Its stable endpoint,
+structured output support and free-tier availability were checked against
+[Google's model documentation](https://ai.google.dev/gemini-api/docs/models/gemini-3.5-flash-lite)
+and [pricing](https://ai.google.dev/gemini-api/docs/pricing) on 2026-10-02.
+It passed all four synthetic live browser scenarios and a correction/history check
+with the configured project. This is a development choice for low latency and free-tier
+extraction; it is not a claim of superior reasoning or guaranteed availability.
+Actual [rate limits](https://ai.google.dev/gemini-api/docs/rate-limits) are project-specific;
+each message normally needs two calls. Changing keys within the same project does
+not increase quota. Keep testing synthetic: Google's free tier may use submitted
+content to improve its products. No billing, paid tier or alternate provider is enabled.
+
+Backend diagnostics appear in the terminal and, by default, ignored
+`backend/tmp/logs/cybersos-<process-id>.jsonl`. Each process has its own file to
+avoid Windows rotation conflicts; files rotate at 1 MB with two backups per process.
+Set `DIAGNOSTICS_LOG_DIR` to a private directory, or blank to disable file logs.
+Delete local diagnostic files when no longer useful; no case content is retained
+in them. Browser DevTools Console shows `[CyberSOS diagnostic]` events for HTTP,
+network, timeout, malformed responses, AI fallback, rendering and runtime errors.
+Browser logs are local console diagnostics, not uploaded telemetry.
+
+Use the `X-Request-ID` response header to correlate a browser event with backend
+`http_request`, `ai_stage` and `request_error` events. AI stages are `extraction`
+and `follow_up`; errors distinguish quota, authentication, missing model, provider
+5xx, timeout, malformed output, validation rejection and application errors.
+The default single retry applies to transient provider/network failures only and
+remains within each stage's existing deadline; `ai_retry` records attempts. Quota,
+authentication, missing-model and invalid-output failures go directly to honest fallback.
+Safe stack locations identify code failures without logging exception messages,
+locals, SQL parameters, stories, evidence, cookies, keys or raw provider responses.
+Raw Uvicorn access logs are suppressed in favor of sanitized route templates.
+
+After changing `.env`, restart the backend; a running process caches settings.
+For the configured hosted database, start from `backend` (no migrations at startup):
+
+```powershell
+..\.venv\Scripts\python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload --no-access-log
+```
+
+The local SQLite launcher above is still available when explicitly choosing local
+development storage. Existing hosted cases remain on the hosted database.
+
+Startup performs no DDL. Head is 20261001_understanding; the first baseline
 uses explicit historical DDL rather than create_all. Before an existing-schema
 upgrade, back up database and original evidence, set LOCAL_STORAGE_ROOT to the
 previous EVIDENCE_STORAGE_DIR and run alembic upgrade head from backend. Supports

@@ -1,664 +1,634 @@
-# CyberSOS — Repository Instructions
-
-## Purpose and scope
-
-Act as the principal software engineer responsible for a reliable, privacy-conscious citizen experience.
-
-CyberSOS is an independent Indian cyber-incident first-response companion. It helps a frightened or confused person understand what happened, contain further harm, preserve evidence, prepare information for official reporting, and follow through on their own actions.
-
-It complements official services. It is not NCRP, I4C, the police, a bank, a legal-advice service, or a fund-recovery service. Never imply government affiliation or authority.
-
-These are standing engineering rules, not an instruction to implement every feature.
-
-Implement only the scope requested in the current task or phase prompt.
-
-Do not autonomously start another roadmap phase.
-
-Changing product specifications, roadmap decisions, playbooks, and architecture documentation belong in docs/ where applicable.
-
----
-
-## Product invariants: conversation before forms
-
-- The primary experience is built around:
-
-  “Tell us what happened.”
-
-- Accept natural language. Support speech when implemented.
-
-- Do not require users to understand cybercrime categories.
-
-- Optional shortcuts may include:
-  - money is gone
-  - account/device hacked
-  - someone is threatening me
-  - suspected scam
-  - already reported
-
-- Use the lifecycle:
-
-  understand
-  → contain
-  → preserve
-  → report
-  → follow through
-
-- Urgent containment or reporting actions may interrupt information collection.
-
-- Derive structured incident facts internally from conversation and evidence.
-
-- Do not recreate the government complaint form as the primary CyberSOS experience.
-
-- Give the first applicable source-backed action as soon as sufficient information is available.
-
-- Never delay an applicable urgent action just to collect:
-  - amount
-  - transaction ID
-  - evidence
-  - login
-  - a completed narrative
-  - optional reporting information
-
-- Ask one focused question at a time.
-
-- Prefer questions whose answers:
-  1. change an urgent action
-  2. change the response branch
-  3. improve containment/preservation
-  4. fill a necessary reporting gap
-
-- Include “Not sure” where appropriate.
-
-- Allow corrections.
-
-- Never ask again for a fact already adequately established unless there is a genuine conflict.
-
-- Resolve uncertainty explicitly. Never silently guess.
-
-- Distinguish what the user said from what the system inferred.
-
-  Example:
-  a caller claiming to be from SBI does not prove the victim banks with SBI.
-
-- Evidence uploads are optional during urgent response.
-
-- When evidence extraction is supported:
-  extract useful details
-  → show the source
-  → ask the user to verify/correct them.
-
-- Do not expose a large fallback form containing every possible incident field if the same missing information can be collected progressively through conversation.
-
-- Measure Time To First Useful Action where applicable.
-
-- Under 30 seconds is a product target to validate, not a claim to display without evidence.
-
----
-
-## Conversation and decision architecture
-
-Keep these boundaries explicit:
-
-message / voice / upload
-→ candidate facts
-→ validation
-→ conversation state
-→ deterministic playbook
-→ actions + next question
-→ reviewed incident packet
-
-### Conversation controller
-
-The conversation controller owns:
-
-- turn state
-- known/unknown facts
-- pending question
-- corrections
-- conflicts
-- progression
-- resume/retry behavior
-
-It does not own critical safety rules.
-
-### AI
-
-AI may:
-
-- extract facts
-- propose classification
-- summarize
-- translate
-- explain approved actions
-- extract supported evidence details
-
-AI must NOT independently:
-
-- choose emergency actions
-- choose financial safety actions
-- choose police actions
-- make legal judgments
-- predict recovery
-- fabricate official outcomes
-- control the workflow
-- override deterministic playbooks
-
-Treat AI output as untrusted candidate data until validated.
-
-### Playbooks
-
-Critical actions come from deterministic, versioned playbooks.
-
-For the same:
-
-validated facts
-
-- playbook version
-
-critical action IDs and ordering must be reproducible.
-
-Each playbook should define:
-
-- typed facts
-- explicit unknown states
-- minimum facts per action
-- action IDs
-- action phase
-- priority/order
-- why the action matters
-- official source where applicable
-- question priorities
-- evidence restrictions
-- supported reporting/handoff destinations
-
-Do not gate every action on every fact being known.
-
-### Facts and provenance
-
-Use typed Pydantic and TypeScript contracts.
-
-Prefer discriminated fact models.
-
-Missing information stays unknown/null.
-
-Unknown is not false and is not zero.
-
-Track fact provenance where applicable:
-
-- user statement
+CyberSOS — AGENTS.md
+1. Purpose of this file
+This file is the permanent product, safety, architecture, UX, and engineering constitution for CyberSOS.
+Every implementation task must preserve the product model described here unless the user explicitly approves a change to a core invariant.
+A phase prompt defines what to work on now. This file defines what CyberSOS is ultimately supposed to become and how engineering decisions must be made.
+Do not silently change the product direction because another implementation would be easier.
+1.1 Engineering agent responsibilities
+Act as a senior full-stack engineer accountable for citizen outcomes, AI, security and UX. Demonstrate this through diagnosis, implementation and verification.
+Separate evidence and assumptions; challenge weak choices while preserving the product. Delegate only when authorized and useful.
+Preserve user changes and running services. Complete authorized reversible work without repeated approvals. Do not introduce frameworks or multi-agent architecture without evidence.
+This file guides development; deployed AI behavior requires implemented and tested application contracts/prompts in its assigned phase.
+2. CyberSOS Core Product Outcome — NON-NEGOTIABLE
+CyberSOS is an AI-first cyber-incident response companion.
+Its purpose is to reduce the work, repetition, confusion, delay, and technical knowledge required from a citizen after a cyber incident.
+The core citizen journey is:
+1. The homepage explains CyberSOS simply.
+2. The citizen clicks Tell us what happened.
+3. A minimal ChatGPT/Claude-style CyberSOS conversation opens.
+4. The citizen explains what happened naturally.
+5. The AI understands as much as it safely can from that story.
+6. The AI investigates conversationally and asks only useful missing questions.
+7. The citizen may answer naturally, use optional quick replies, or attach evidence.
+8. The AI may request useful evidence conversationally when it would reduce effort or improve understanding.
+9. Evidence can be uploaded directly through the conversation composer.
+10. AI extracts useful candidate information from supported evidence.
+11. The citizen verifies or corrects extracted information when necessary.
+12. The canonical case state updates automatically.
+13. Deterministic safety/action policy evaluates the known facts.
+14. Urgent actions appear as soon as they are justified.
+15. Once enough useful information exists, CyberSOS presents an appropriate live response plan.
+16. A CyberSOS case sheet builds itself automatically from canonical state.
+17. Conversation + verified evidence + timeline + actions become a complaint-ready reporting packet.
+18. CyberSOS helps the citizen hand the reviewed packet to a verified official reporting destination.
+19. If an authorized official integration becomes available in the future, the same reviewed packet should be capable of feeding that integration.
+20. The citizen can securely return later and continue working with the same case.
+The citizen should primarily:
+- talk naturally;
+- answer useful questions;
+- use optional quick replies;
+- attach evidence;
+- verify or correct information.
+The citizen should NOT primarily:
+- fill forms;
+- choose cybercrime categories;
+- maintain case fields manually;
+- classify evidence manually;
+- repeat information already supplied;
+- navigate multiple technical workflows.
+CyberSOS is not a questionnaire disguised as chat.
+CyberSOS is not a generic chatbot.
+CyberSOS is not a government portal clone.
+The core UI philosophy is:
+MINIMAL CHAT SURFACE OUTSIDE. POWERFUL CASE-BUILDING SYSTEM UNDERNEATH.
+
+Do not change this core product model without explicit user approval.
+3. Core Product Invariants
+The following are product invariants.
+Do not silently change them.
+3.1 Story first
+Normal incident intake begins with the citizen explaining what happened in their own words.
+Do not require category selection or a structured incident form before that opportunity.
+3.2 No fixed questionnaire
+There is no universal:
+Question 1 → Question 2 → Question 3 → intake complete
+flow.
+The AI determines the most useful conversational interaction from current case context.
+Different incidents may produce completely different conversations.
+3.3 AI-led investigation
+AI owns conversational understanding and investigation.
+It may:
+- understand natural language;
+- identify supported incident signals;
+- extract candidate facts;
+- determine useful missing information;
+- ask clarification;
+- request useful evidence;
+- ask the citizen to verify information;
+- resolve contradictions conversationally;
+- summarize the developing case;
+- translate or explain approved information;
+- draft a report narrative from reviewed facts.
+3.4 Deterministic critical actions
+AI does not independently create authoritative critical safety, financial, emergency, police, legal, or recovery instructions.
+Critical ResponseActions come from deterministic, reviewed, versioned application policy/playbooks.
+The intended architecture is:
+AI understands / investigates
+→ application validates
+→ canonical case state
+→ deterministic safety/action policy
+→ approved ResponseActions
+→ AI/UI may present or explain those approved actions naturally
+3.5 No intake-completion gate
+CyberSOS does not need every possible detail before helping.
+If an urgent deterministic action is already justified, show it.
+Do not delay an applicable urgent action merely to finish questioning.
+At the same time, do not present branch-specific actions before the facts required for them are known.
+3.6 Living case
+The case is never a one-time frozen intake result.
+New conversation, corrections, evidence, identifiers, or incident signals may update:
+- canonical facts;
+- working understanding;
+- response plan;
+- case sheet;
+- evidence needs;
+- reporting readiness.
+4. Citizen-Facing UI Contract
+4.1 Homepage
+The homepage should remain simple.
+Its job is to:
+- explain what CyberSOS is;
+- explain the value simply;
+- provide the primary Tell us what happened CTA.
+Do not turn the homepage into an incident dashboard.
+4.2 After “Tell us what happened”
+The citizen enters a dedicated minimal conversation experience.
+The main surface should feel closer to ChatGPT/Claude than a government workflow.
+Initially avoid showing empty:
+- dashboards;
+- response-plan sidebars;
+- case tables;
+- category pickers;
+- evidence forms.
+Let the citizen begin by talking.
+4.3 Permanent conversation composer
+The bottom composer is the permanent control center for the case.
+Preferred concept:
+[ + Attach ]  Message CyberSOS...  [Voice]  [Send]
+Requirements:
+- remains available throughout the conversation;
+- sticky at the bottom of the conversational viewport where practical;
+- supports natural free-text responses at all times;
+- grows for several lines before internal scrolling;
+- works on desktop and mobile;
+- remains keyboard accessible;
+- supports failed-send/retry behavior.
+Keep the bottom composer accessible on desktop/mobile with artifacts open, without obscuring content or focus. Preserve drafts on recoverable failures; show upload/transcription progress and cancellation. Do not stream unchecked authoritative instructions.
+Quick replies are optional conveniences only.
+They must never replace the ability to type naturally.
+4.4 Attachments
+Use one simple attachment entry point, such as +.
+The citizen should be able to attach supported items such as photos, screenshots, or files without first classifying what type of evidence they are.
+CyberSOS should determine candidate evidence type itself and ask for confirmation only when useful.
+Evidence uploads should be part of the conversation experience, not a required separate workflow.
+Support approved JPG/JPEG, PNG and PDF uploads, previews and clear limits, voluntarily or when requested, without prior classification.
+4.4.1 Multilingual voice input
+Deliver multilingual voice input in its assigned phase: explicit recording start, visible status, stop/cancel, and editable transcript sent through the typed-text pipeline.
+Evaluate declared languages, transliteration and code-mixing, including English, Telugu/Roman Telugu and Hindi/Hinglish. No universal-language claim. Spoken replies are separately optional.
+4.5 Chat-first hierarchy
+Preferred hierarchy:
+Layer 1 — Conversation
+Most citizen interaction happens here.
+Layer 2 — Rich CyberSOS artifacts
+Appear only when useful, for example:
+- Response Plan;
+- evidence review;
+- extracted-information review;
+- CyberSOS case sheet;
+- reporting preview.
+Layer 3 — Full Case View
+Opened intentionally when the citizen wants deeper case management.
+Do not make all three permanently compete for screen space.
+4.6 One active interaction
+Do not render the same AI question twice.
+Avoid:
+assistant message containing a question
++
+large separate card repeating that question.
+Prefer one coherent conversational interaction with optional inline quick replies and the persistent composer.
+4.7 Semantic UI states
+Questions and ordinary investigation should generally remain visually neutral.
+Use urgent/high-attention styling only for genuinely urgent applicable actions.
+Use success/completed styling for completed or verified states.
+Use warning styling sparingly for uncertainty or warnings.
+Do not communicate urgency by color alone.
+5. AI Case Agent Contract
+The AI Case Agent should reason over current case context and propose a bounded conversational response, with an optional next move.
+It may acknowledge, answer, explain and ask at most one useful follow-up in one coherent reply. Do not force every response to end with a question or fit one database field.
+Possible conceptual move types include:
+- ASK_CLARIFICATION
+- REQUEST_EVIDENCE
+- VERIFY_INFORMATION
+- RESOLVE_CONFLICT
+- ACKNOWLEDGE_AND_WAIT
+- EXPLAIN_APPROVED_ACTION
+- CONTINUE_OPEN_CONVERSATION
+- ANSWER_RELEVANT_QUESTION
+Project naming may differ, but the behavior must remain bounded and server-validated.
+The model must not receive arbitrary tool authority.
+Do not expose chain-of-thought.
+The AI should know enough current case context to avoid asking what is already known.
+Useful context can include:
+- canonical facts;
+- relevant uncertainty;
+- unresolved conflicts;
+- recent conversation;
+- currently applicable deterministic actions;
+- evidence metadata;
+- evidence restrictions;
+- working incident signals.
+5.1 Case memory and context
+Persist both sides of each case conversation, corrections, declined questions and open issues across reload/secure return.
+Memory layers: historical transcript, canonical facts and derived source-linked summary. Refresh after corrections; summaries and old assistant claims never override facts or verify uncertain information.
+Assemble recent exchanges, relevant older history, current facts, conflicts and actions within a context budget; avoid fixed last-N-only or unlimited transcripts.
+Enforce case ownership. Define retention/deletion, including summaries, indexes and caches; no implicit cross-case memory.
+5.2 Curated retrieval-augmented generation (RAG)
+RAG supplies reviewed knowledge; memory supplies case context; the LLM interprets language. Retrieval cannot establish citizen facts or authorize critical actions.
+Curate sources with identifiers, jurisdiction, supported claims, version/review dates and refresh/withdrawal. Retrieve when needed; cite actual supporting material.
+Separate shared knowledge and private case material. Enforce ownership before retrieval reaches the model; uploads never automatically enter shared knowledge.
+Treat retrieved text as untrusted: no policy override, secret access, arbitrary tools or new actions. On missing support/failure, explain the limitation and continue from available facts/approved actions.
+Start small with replaceable local retrieval. Embeddings/vector infrastructure and live browsing need evidence; search results need review before authoritative use.
+6. Conversation Rules
+6.1 Do not repeat known information
+Never ask for information already stated adequately or safely established from reviewed evidence.
+6.2 Natural responses are first-class
+The citizen may answer:
+- with complete sentences;
+- loosely;
+- with corrections;
+- with mixed-language text;
+- instead of selecting a quick reply.
+Do not make legitimate conversational language fail merely because it does not match an exact button value.
+NLP is provided primarily by the LLM for intent, entities, corrections, uncertainty and multilingual interpretation; specialized components require evidence of need.
+Validate meaning, provenance, fact/action/source references and safety, not an exhaustive allowlist of sentence wording. Render accepted grounded AI wording; scripted copy is fallback only.
+6.3 Grounded acknowledgement
+CyberSOS should visibly demonstrate that it understood the citizen.
+Acknowledgements must use validated information only.
+Do not discard useful known information merely because a related field is still unknown.
+Do not introduce unsupported details.
+6.4 Corrections
+If the citizen corrects a prior statement:
+- preserve relevant history/provenance;
+- update current canonical truth;
+- reevaluate deterministic actions;
+- update the case;
+- do not force a form-edit workflow.
+6.5 Multiple incident signals
+Do not force every case into one exclusive category.
+A case may contain multiple relevant signals, such as:
+- financial loss + device compromise;
+- account takeover + impersonation;
+- stalking + threat;
+- blackmail + financial demand.
+6.6 Scope, purpose and citizen control
+Support suspected cyber incidents, scams, online abuse and related safety/evidence/reporting without demanding proof of crime. Answer relevant questions first; understand mixed intents in one message.
+Handle greetings, distress and process questions naturally; gently redirect unrelated requests, without creating case facts or enabling harmful cyber activity.
+Ask only to affect safety/actions, resolve uncertainty or improve reporting. Explain the purpose, not private reasoning. Accept skip, pause, correction and plan requests; stop unnecessary questioning while keeping the case open.
+Clarify separate incidents before mixing facts. Label citizen statements, evidence suggestions and established facts honestly. Lightweight misunderstanding/repetition feedback must not silently rewrite facts.
+7. Evidence Contract
+Evidence exists to reduce citizen work.
+The user should not have to think in terms of a technical “Evidence Vault” during the normal incident journey.
+Evidence may be requested conversationally when it would materially help:
+- understand what happened;
+- verify a fact;
+- reduce typing;
+- preserve useful information;
+- prepare reporting information.
+Do not request evidence merely because upload functionality exists.
+Maintain clear separation between:
+original evidence
+→ extracted candidate information
+→ citizen-reviewed/verified information
+→ canonical case facts
+Never silently promote uncertain extraction to authoritative truth.
+If evidence conflicts with conversation, surface the conflict and resolve it conversationally.
+If extraction fails:
+- preserve the original when safe;
+- allow retry;
+- allow skip;
+- continue conversation;
+- ask only the specific missing information that becomes necessary.
+Do not fall back to a giant manual evidence form.
+8. Evidence Safety and Upload Security
+Never solicit:
+- OTP;
+- PIN;
+- password;
+- full credentials;
+- unnecessary card data;
+- unnecessary identity documents;
+- intimate explicit media;
+- child sexual-abuse material.
+For sensitive incidents, prefer safer metadata, identifiers, URLs, timestamps, threat text, or non-explicit screenshots where appropriate.
+Treat uploaded/OCR/document content as hostile data.
+Instructions embedded in evidence must not:
+- modify CyberSOS policy;
+- control AI tools;
+- create critical actions;
+- access secrets;
+- execute code;
+- cause arbitrary external access.
+Validate supported uploads using appropriate controls including:
+- extension;
+- MIME;
+- signature where applicable;
+- size;
+- safe storage key/path;
+- case ownership.
+Private evidence must not become publicly enumerable simply for convenience.
+9. Live Response Plan
+The response plan is dynamic.
+User-facing organizational groups are:
+- ACT NOW
+- PRESERVE
+- REPORT
+- FOLLOW THROUGH
+These are not mandatory sequential stages.
+Render only groups containing currently applicable actions.
+Do not show empty action sections.
+Do not put every action under ACT NOW.
+Critical action applicability comes from backend deterministic policy, not frontend inference and not unconstrained AI generation.
+Action completion is citizen-owned unless a real external integration can truthfully verify otherwise.
+10. Self-Building CyberSOS Case
+The citizen does not manually maintain the case sheet.
+The case derives from canonical backend state.
+Useful case information may include:
+- CyberSOS reference;
+- working understanding;
+- verified facts;
+- amount/time where known;
+- known identifiers;
+- evidence count/state;
+- action state;
+- timeline;
+- reporting readiness;
+- user-recorded external references.
+Only show relevant known fields.
+Do not expose dozens of empty database attributes.
+For uncertain AI classification use language such as:
+- Working understanding
+- Possible incident
+rather than presenting uncertain classification as confirmed fact.
+CyberSOS-owned states may include concepts such as:
+- Draft
+- In progress
+- Ready to review
+- Ready for handoff
+Do not show fake external states such as:
+- Police reviewing
+- Bank investigating
+- Funds frozen
+- Complaint accepted
+- Recovery underway
+unless a genuine verified integration provides that information.
+External references manually supplied by the citizen should be labeled honestly, such as Recorded by you, unless independently verified.
+11. Reporting and Official Handoff
+A core purpose of CyberSOS is to prevent the citizen from having to tell the same story again when they need to report it.
+The intended path is:
+conversation
+- reviewed facts
 - evidence
-- AI extraction/inference
-- user verification
-- correction/superseded value
-
-Preserve meaningful correction history.
-
-Flag contradictions instead of silently merging them.
-
----
-
-## Incident-response truth and official handoff
-
-Explicitly distinguish:
-
-1. a payment the user authorized after being deceived
-
-from
-
-2. a transaction the user did not authorize
-
-Do not automatically apply unauthorized-transaction guidance to scam-induced authorized transfers.
-
-Do not force every cyber incident into a money-lost flow.
-
-Maintain a central official-source registry containing:
-
-- authority
-- purpose
-- official URL
-- supported claim/context
-- actual review date
-
-Verify official guidance against primary sources before adding or changing source-backed action text.
-
-Never fabricate review dates.
-
-Do not predict:
-
-- recovery probability
-- reversal probability
-- fixed recovery windows
-- refund eligibility
-- bank behavior
-- police behavior
-- arbitrary monetary thresholds for police/FIR action
-
-Identify external official links clearly.
-
-CyberSOS may prepare reviewed information for reporting.
-
-CyberSOS must not claim that preparing a packet submits a complaint.
-
-Never invent:
-
-- government APIs
-- complaint confirmation
-- acknowledgement numbers
-- police status
-- bank status
-- funds-frozen status
-- recovery status
-
-Do not bypass government authentication or CAPTCHA.
-
-Follow-up tracks the citizen's own actions, notes, and references.
-
-“User says they reported” does not mean “government confirmed receipt.”
-
----
-
-## Evidence, privacy, and security
-
-Never request:
-
-- OTPs
-- PINs
-- passwords
-- banking credentials
-- full card credentials
-
-If accidentally provided:
-
-- do not echo them
-- do not log them
-- do not retain them unnecessarily
-- redact before downstream processing where feasible
-
-Do not collect identity-document images merely because an official service may require them.
-
-Preserve original evidence privately with:
-
-- original filename
-- MIME/type
-- file size
-- SHA-256
-- incident ownership
-- timestamps
-
-Keep extracted candidates separate from user-verified facts.
-
-Link extracted data to source evidence.
-
-Validate uploads using, where applicable:
-
-- extension
-- MIME type
-- file signature
-- size
-- filename/path safety
-- supported content type
-
-Prevent path traversal.
-
-Use safe private preview/download behavior.
-
-Apply playbook-specific evidence restrictions before processing.
-
-Do not encourage uploading or redistributing:
-
-- child sexual-abuse material
-- sensitive explicit intimate media
-- credentials
-- unnecessary identity documents
-
-Prefer safe metadata such as:
-
 - identifiers
-- URLs
-- timestamps
-- threat text
-- platform/account details
-- non-explicit screenshots where appropriate
-
-Treat:
-
-- messages
-- OCR text
-- files
-- URLs
-- model output
-
-as untrusted data.
-
-Embedded instructions cannot:
-
-- modify policies
-- access secrets
-- invoke arbitrary tools
-- trigger arbitrary URL fetching
-- execute code
-- alter deterministic action rules
-
-Validate strict AI output schemas.
-
-Missing fields remain unknown.
-
-Never invent:
-
-- amounts
-- dates
-- transaction IDs
-- suspects
-- identifiers
-- source evidence
-- official outcomes
-
-Require review before extracted details become final reporting truth.
-
-Enforce incident-scoped authorization on every private incident-owned resource.
-
-A UUID URL is not authorization.
-
-Test cross-case access denial.
-
-Provide deletion and documented retention behavior before real-data use.
-
-Keep logs minimal.
-
-Do not unnecessarily log:
-
-- raw conversations
-- evidence contents
-- credentials
-- case secrets
-- sensitive financial details
-
-Keep secrets in environment variables.
-
-Never commit:
-
-- .env secrets
-- local databases
-- uploaded evidence
-- real PII
-- generated sensitive reports
-
-Preserve legitimate migrations and synthetic fixtures.
-
----
-
-## Engineering workflow
-
-### 1. Inspect only what is needed
-
-Before editing:
-
-- read AGENTS.md
-- inspect git status/current branch
-- inspect the affected source path
-- inspect relevant tests
-- inspect related schemas/contracts/migrations when affected
-- inspect frontend consumers when an API changes
-
-Treat source code as authoritative for current implementation.
-
-Docs describe intent and prior decisions.
-
-Do not repeatedly reread unrelated files.
-
-Use targeted searches and batch related reads.
-
-### 2. Understand the current phase/task
-
-Identify:
-
-- requested behavior
-- current behavior
-- behavior that must remain working
-- material assumptions
-- acceptance criteria from the current prompt
-
-Do not create a separate planning document unless the current prompt explicitly asks for one.
-
-Do not stop after producing a plan.
-
-Implement the requested work.
-
-### 3. Solve root causes
-
-Trace the complete affected path when necessary.
-
-Prefer fixing:
-
-- conflicting models
-- duplicate routes
-- contract drift
-- schema drift
-- unsafe ownership
-- bad domain logic
-
-rather than layering compatibility hacks over them.
-
-Avoid unrelated rewrites.
-
-Prefer one canonical implementation for each resource.
-
-### 4. Implement one phase at a time
-
-The current user prompt defines the phase/task.
-
-Complete that phase coherently.
-
-Do not split it into extra roadmap subphases unless:
-
-- a concrete blocker requires isolation
-- a failing implementation needs a focused repair
-- the user explicitly asks for subdivision
-
-Do not autonomously start the next phase.
-
-### 5. Migrate deliberately
-
-Use tracked Alembic migrations.
-
-Prefer additive transitions where existing incidents/data must remain compatible.
-
-`create_all()` is not a migration strategy.
-
-When schema changes:
-
-- test fresh schema creation
-- test upgrade from the currently supported prior schema
-
-Avoid permanent startup-time schema patches.
-
-### 6. Keep local work deterministic
-
-Optional cloud/AI credentials must not prevent:
-
-- local startup
-- relevant automated tests
-- deterministic fallback behavior
-
-Use:
-
-- isolated test databases
-- temporary storage
-- provider doubles
-- synthetic data
-
-Do not fake successful extraction, saving, submission, or provider behavior.
-
-### 7. Work economically
-
-Prefer the smallest sufficient investigation and implementation.
-
-Reuse confirmed findings from the current task/session.
-
-Do not:
-
-- reread unrelated code without reason
-- create unnecessary abstractions
-- run the entire suite after every small edit
-- repeatedly rerun checks that already passed and were unaffected
-- produce planning artifacts that were not requested
-
-Expand investigation/testing only when evidence or the change requires it.
-
-### 8. Finish authorized work
-
-Implement and verify the requested phase/task.
-
-Do not merely propose a fix.
-
-Do not overwrite unrelated user changes.
-
-Do not:
-
-- create/switch branches
-- commit
-- merge
-- push
-- deploy
-- spend money
-- destructively alter production data
-
-unless explicitly authorized.
-
----
-
-## Verification strategy
-
-Testing is required, but verification should be efficient.
-
-### During implementation
-
-Run targeted tests for the code being changed.
-
-Examples:
-
-- affected service/domain tests
-- affected API contract tests
-- migration test when schema changes
-- relevant frontend/component tests
-- relevant scenario/golden tests
-
-Do not repeatedly run the complete application suite after every small edit.
-
-### When the phase implementation is stable
-
-Run the complete acceptance checks required by the phase prompt.
-
-For major application phases, this normally includes:
-
-- full backend test suite
-- frontend lint
-- frontend production build
-- affected API/contract tests
-- migrations when changed
-- relevant end-to-end or smoke journey
-
-Run the full acceptance suite once after the implementation is stable.
-
-If a final check fails:
-
-fix the cause
-→ rerun the failed/affected checks
-→ rerun broader checks only when the fix could affect them.
-
-Do not blindly rerun every expensive command multiple times.
-
-### Testing expectations
-
-Add meaningful tests for changed behavior.
-
-Examples where applicable:
-
-- regression reproduction for bugs
-- deterministic action IDs/order
-- authorized scam vs unauthorized debit
-- unknown/conflicting facts
-- correction behavior
-- useful actions before reporting fields/uploads
-- no repeated established facts
-- cross-case authorization denial
-- provider failure fallback
-- malformed/injected AI output
-- upload rejection
-- evidence verification
-- frontend/backend contracts
-- migration upgrades
-- no fabricated recovery/status claims
-- accessibility where UI changes
-
-Use synthetic data only.
-
-Before completion inspect the final diff/status for:
-
-- secrets
-- local databases
-- uploaded evidence
-- real PII
-- unrelated edits
-
----
-
-## Single-phase execution protocol
-
-CyberSOS is now implemented using one primary Codex prompt per roadmap phase.
-
-For every phase:
-
-1. Read AGENTS.md.
-
-2. Read only the project documentation necessary to understand the requested phase.
-
-3. Inspect the current implementation before editing.
-
-4. Implement the entire requested phase.
-
-5. Use targeted tests while developing.
-
-6. When implementation is stable, run the phase's full acceptance checks once.
-
-7. Fix failures introduced by the phase.
-
-8. Do not start the next phase.
-
-9. Do not create extra phase subdivisions or planning documents unless required by a concrete implementation problem or explicitly requested.
-
-10. Do not claim completion for checks that were not run.
-
-If a phase fails after implementation:
-
-repair the current phase only.
-
-Do not work around the failure by beginning a later phase.
-
----
-
-## Completion report
-
-Keep the final report concise.
-
+- timeline
+- actions
+  → reviewed reporting packet
+  → official handoff
+AI may draft a readable reporting narrative only from reviewed information.
+Do not invent facts, dates, identities, legal conclusions, amounts, or official status.
+Until a genuine authorized direct integration exists, CyberSOS may support truthful handoff such as:
+- review;
+- copy;
+- print/PDF/export;
+- open verified official reporting destination;
+- help the citizen transfer prepared information.
+Architect reporting behind a provider/adapter boundary so a future authorized official integration can consume the same reviewed packet.
+Never fabricate an official API.
+Never claim submission occurred unless CyberSOS actually submitted through a verified authorized integration and received a real response.
+12. Canonical Facts, Unknowns and Provenance
+Missing information remains unknown.
+Never coerce unknown information to false, zero, empty truth, or invented defaults when that changes meaning.
+Do not invent:
+- amount;
+- date/time;
+- bank;
+- payment rail;
+- UTR/reference;
+- recipient;
+- suspect identity;
+- official status.
+Distinguish important semantic differences, including:
+- scam-induced user-authorized payment;
+- unauthorized transaction.
+Maintain provenance sufficient to understand where important information came from, such as:
+- citizen conversation;
+- citizen correction;
+- evidence extraction;
+- citizen verification;
+- system-derived deterministic state.
+13. Official-Source Truth
+CyberSOS must remain clearly independent unless that status genuinely changes.
+Use verified official sources for official reporting destinations and authoritative external information.
+Do not claim guaranteed recovery, reversal, police behavior, bank behavior, NPCI behavior, or arbitrary thresholds without verified support.
+Do not fabricate timelines or probabilities of fund recovery.
+14. Cross-Layer Engineering Requirement
+Do not treat a requested phase as frontend-only or backend-only unless investigation proves that is sufficient.
+For the requested end-user result, trace the complete affected path:
+USER EXPERIENCE
+→ FRONTEND
+→ API CONTRACT
+→ BACKEND / DOMAIN / AI
+→ DATABASE / STORAGE
+→ BACK TO FRONTEND
+Determine which layers actually require changes.
+Change only the layers necessary, but verify the complete journey.
+A backend implementation is not complete if the citizen cannot experience it correctly.
+A frontend implementation is not complete if it fakes, duplicates, or contradicts backend truth.
+A database change is not complete if migration, persistence, authorization, or resume behavior breaks.
+Canonical case truth belongs in the backend/domain/database rather than duplicated frontend-only state.
+15. Architecture Principles
+Prefer clear boundaries between:
+- conversational AI understanding;
+- candidate validation;
+- canonical case facts;
+- deterministic safety/action policy;
+- evidence processing;
+- case projection/presentation;
+- reporting/handoff providers.
+Avoid creating parallel systems for each incident type.
+Reuse the same core conversation/case/evidence/reporting architecture across supported incident domains.
+Prefer stable typed contracts over implicit frontend/backend coupling.
+Avoid unnecessary rewrites of working architecture.
+Do not overengineer speculative future phases.
+However, do not make a local decision that unnecessarily blocks the known final product direction.
+16. Security and Authorization
+Case resources require incident-scoped/user-scoped authorization.
+A UUID or guessed identifier alone is never authority.
+Apply authorization consistently to:
+- conversations;
+- cases;
+- evidence metadata;
+- evidence files;
+- actions;
+- timelines;
+- identifiers;
+- reporting packets;
+- exports.
+Protect against relevant risks including:
+- IDOR/cross-case access;
+- XSS/untrusted rendering;
+- CSRF/CORS issues where applicable;
+- malicious uploads;
+- path traversal;
+- prompt injection;
+- evidence/OCR injection;
+- replay/concurrency errors;
+- secret exposure;
+- unsafe logs;
+- provider malformed output.
+Do not log raw sensitive information unnecessarily.
+Use synthetic data during development and automated tests until security readiness supports broader data handling.
+17. Mandatory Engineering Method
+Do not assume a phase prompt perfectly describes the current repository.
+Before implementing substantial work:
+1. Inspect the existing implementation.
+2. Reproduce the current citizen journey or bug where possible.
+3. Identify what already works correctly.
+4. Trace the relevant frontend → API → backend → database/storage path.
+5. Identify the actual root cause or architectural gap.
+6. Evaluate reasonable implementation options.
+7. Choose the smallest robust solution that best serves the CyberSOS Core Product Outcome.
+8. Reuse good existing architecture.
+9. Avoid unnecessary rewrites, duplicate systems, and compatibility hacks.
+10. Implement the chosen solution.
+11. Run targeted tests while working.
+12. Verify the complete real user journey when stable.
+13. Report what changed and what was proven.
+Do not immediately code based only on assumptions in the prompt.
+Do not stop at investigation or a plan when the current task explicitly asks for implementation and enough evidence exists to proceed.
+Ask the user only when a missing decision is genuinely irreversible, safety-critical, externally costly, or changes the core product model.
+17.1 Research and runtime evidence
+Research changing models, SDKs, official guidance and security using current primary sources. Cite evidence/tradeoffs; vendor benchmarks do not prove project suitability.
+Establish runtime directory, env-loading/overrides, redacted DB target, migrations/tables, frontend API target and provider/model. Reconcile discrepancies against the running app without exposing secrets.
+18. Design Authority
+The agent may make routine, reversible engineering decisions independently.
+The agent may recommend and implement improvements to:
+- architecture;
+- schema;
+- component boundaries;
+- provider interfaces;
+- performance;
+- maintainability;
+- accessibility;
+- internal UX implementation;
+- testing strategy;
+when those improvements preserve the Core Product Outcome.
+If a requested implementation detail is technically poor, the agent may choose a cleaner approach when it produces the same required end-user result.
+The agent must STOP and ask before changing a core invariant, including:
+- chat-first incident intake;
+- no form-first citizen journey;
+- AI-led conversational investigation;
+- deterministic critical action policy;
+- self-building case;
+- evidence inside the main conversation experience;
+- complaint-ready reporting objective;
+- truthful official/external status;
+- future official-handoff compatibility.
+Technical implementation may evolve.
+Core product purpose may not silently drift.
+19. Phase Execution Protocol
+A phase prompt defines the active implementation scope.
+Use this file for permanent direction and the phase prompt for current work.
+Rules:
+- new major phase → use a fresh Codex conversation;
+- repair/bug within the current phase → continue in the same phase conversation;
+- inspect first;
+- implement only the active phase;
+- do not pre-build future phases merely because they are known;
+- do not automatically commit, push, deploy, spend money, provision paid infrastructure, or enable production access unless explicitly asked;
+- stop at the requested phase boundary after verification and reporting.
+If a phase reveals that a later phase's implementation assumptions are outdated, report that clearly rather than silently changing the roadmap.
+19.1 Current development constraint
+Free-tier testing only: synthetic stories, files, images and voice, no real citizen data. No billing or silent paid fallback.
+Check account availability/limits. Gemini 3.8 Flash is provisional, not a proven winner; change configured models only in authorized scope.
+Evaluate models on identical case context, RAG, multilingual journeys, accuracy, safety, latency and quota behavior. Keep provider/retrieval/speech boundaries replaceable; prefer local memory/retrieval within budget.
+Declare launch incident coverage, jurisdiction, languages and retention in phase planning rather than inventing decisions. Spoken replies and unrestricted browsing are not agreed launch requirements.
+20. Verification Principles
+Verification must prove product behavior, not merely that code compiles.
+Use the smallest useful test loop while implementing, then broader acceptance once stable.
+Where relevant verify:
+- unit/domain behavior;
+- API contracts;
+- migrations;
+- authorization;
+- frontend rendering;
+- persistence/resume;
+- provider failure behavior;
+- mobile/responsive behavior;
+- real citizen journeys.
+When an external AI provider is configured, distinguish clearly between:
+- fake/mock provider tests;
+- live provider tests.
+Do not claim live AI works based only on mocks.
+For multi-stage AI flows, verify every critical stage rather than only the first provider call.
+Do not claim performance targets such as time-to-first-action unless they were actually measured.
+20.1 Conversation quality is acceptance
+Extraction, valid JSON, HTTP 200 and unit tests alone do not prove conversational quality.
+Test multi-turn questions, explanations, corrections, unknowns, skips, unrelated messages, distress, multiple signals, evidence conflicts and resume. Assess useful answers, accurate recall, reduced repetition and citizen effort.
+Combine deterministic checks and human review; calibrate model graders, never use them as sole authority.
+Verify memory freshness, retrieval/source support, isolation, injection resistance, voice accuracy and declared languages. Measure failures, latency and case cost; safe quota/timeout/malformed-output handling must preserve validation and privacy.
+21. Roadmap / Architecture Review After Every Phase
+After implementation and verification, report:
+1. Did this phase reveal an assumption in a later phase that is now technically outdated?
+2. Is there an architecture decision from this phase that later phases must know about?
+3. Should a later phase's implementation approach change?
+4. Would any recommended change alter a Core Product Invariant?
+Classify roadmap impact as:
+REQUIRED CHANGE
+A future prompt would conflict with the real implementation or architecture if unchanged.
+OPTIONAL IMPROVEMENT
+A better approach exists but the roadmap still works.
+NO CHANGE
+The current roadmap remains compatible.
+If a proposed change affects a Core Product Invariant, do NOT implement it automatically. Flag it for user discussion.
+22. Standard Completion Report
+Every substantial phase or repair should end with a concise report containing:
+1. Citizen Experience
+What can the citizen now do that they could not do before?
+2. Root Cause / Gap
+What was wrong, missing, or limiting before the implementation?
+3. Implementation Decision
+What approach was chosen and why?
+4. Frontend
+What materially changed?
+5. Backend / Domain / AI
+What materially changed?
+6. Database / Storage
+What materially changed?
+If none, say none.
+7. API / Contracts
+What materially changed?
+If none, say none.
+8. Security / Privacy
+What relevant boundaries were preserved or changed?
+9. Tests
+What tests were added or updated?
+10. Verification
+List the exact commands actually run and their results.
+11. Live Provider Status
+Where applicable distinguish:
+- fake/mock provider;
+- live provider;
+- not run.
+12. Manual User Journey
+State the exact manual journey the user should test next.
+13. Known Limitations
+Be explicit.
+14. Roadmap Impact
 Report:
+- REQUIRED CHANGE;
+- OPTIONAL IMPROVEMENT;
+- NO CHANGE.
+15. Core Product Check
+Explicitly state whether the implementation preserved:
+- chat-first citizen experience;
+- no form-first intake;
+- AI conversational investigation;
+- deterministic critical actions;
+- self-building case;
+- truthful external status;
+- official-handoff compatibility.
+23. Definition of a Good CyberSOS Change
+A good change makes CyberSOS feel more like:
+“I told CyberSOS what happened once, it understood me, asked only what mattered, helped me act safely, organized my evidence, built my case, and prepared me to report it.”
 
-- what changed and why
-- key architectural/domain decision
-- important files changed
-- API changes
-- migration changes
-- tests added/updated
-- exact verification commands actually run
-- results
-- assumptions
-- material limitations or blockers
-- manual checks the user should perform
+A bad change makes CyberSOS feel more like:
+“I entered another form, repeated myself, classified things manually, and followed a scripted questionnaire.”
 
-Use “not run” when a check was not run.
-
-Never imply:
-
-- the entire CyberSOS product is complete when only one phase was implemented
-- a live provider was tested when only a fake/provider double was tested
-- an external government action occurred when CyberSOS only prepared information
+When implementation choices are ambiguous, prefer the option that reduces citizen effort while preserving safety, truth, security, and maintainability.
+24. Final Architecture North Star
+The intended product architecture is conceptually:
+CITIZEN
+→ natural conversation / voice / attachments
+→ AI CASE AGENT
+→ candidate understanding
+→ application validation
+→ CANONICAL CASE STATE
+→ deterministic safety/action policy
+→ LIVE RESPONSE PLAN
+and in parallel:
+CANONICAL CASE STATE
+→ evidence / identifiers / timeline / verified facts
+→ SELF-BUILDING CYBERSOS CASE
+→ REVIEWED REPORTING PACKET
+→ VERIFIED OFFICIAL HANDOFF
+→ future authorized direct integration if one legitimately exists
+The exact internal implementation may evolve.
+The product outcome above should not.
+The AI also receives authorized case memory and relevant reviewed knowledge. These support conversation without replacing canonical facts or deterministic action policy.
+25. Research basis for these instructions
+The senior-engineer role is a project choice, not a proven best persona. The research supports clear context, responsibilities and verification:
+- [Agent architecture](https://www.anthropic.com/engineering/building-effective-agents)
+- [Context engineering](https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents)
+- [RAG security](https://cheatsheetseries.owasp.org/cheatsheets/RAG_Security_Cheat_Sheet.html)
+- [AGENTS.md discovery and size limits](https://learn.chatgpt.com/docs/agent-configuration/agents-md)
+Reviewed 2026-10-02. Recheck changing facts. Stay within the loader budget; future outcomes never authorize early implementation.

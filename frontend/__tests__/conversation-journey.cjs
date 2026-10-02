@@ -47,7 +47,7 @@ const web = process.env.SMOKE_FRONTEND_URL || 'http://localhost:3001';
       for (const [title, items] of groups) {
         assert.deepEqual(await panel.locator(`[data-action-group="${title}"] [data-action-id]`).evaluateAll(nodes => nodes.map(node => node.dataset.actionId)), items.map(a => a.id));
       }
-      assert.equal(await question.evaluate(node => node.classList.contains('bg-calm-soft') || node.classList.contains('border-calm')), false, 'Unanswered question does not use success styling');
+      if (state.pending_question) assert.equal(await question.evaluate(node => node.classList.contains('bg-calm-soft') || node.classList.contains('border-calm')), false, 'Unanswered question does not use success styling');
       assert.deepEqual(await actNow.locator('[data-action-id]').evaluateAll(nodes => nodes.map(node => node.dataset.actionId)), urgent.map(a => a.id));
       assert.deepEqual(await panel.locator('[data-action-id]').evaluateAll(nodes => nodes.map(node => node.dataset.actionId).sort()), ordered.map(a => a.id).sort());
       assert.deepEqual(await actNow.locator('[data-action-order]').evaluateAll(nodes => nodes.map(node => Number(node.dataset.actionOrder))), urgent.map(a => a.order));
@@ -77,11 +77,11 @@ const web = process.env.SMOKE_FRONTEND_URL || 'http://localhost:3001';
     assert.equal(state.facts.ongoing_loss, null);
     await assertActions(state);
     const mobileActions = page.getByRole('navigation', { name: 'Conversation shortcuts' });
-    await page.locator('summary').filter({ hasText: 'Saved conversation' }).click();
+
     await mobileActions.getByRole('link', { name: /actions? to take now/ }).focus();
     await page.keyboard.press('Enter');
     assert.equal(await page.evaluate(() => document.activeElement.id), 'act-now-heading');
-    await mobileActions.getByRole('link', { name: 'Next question', exact: true }).click();
+    await mobileActions.getByRole('link', { name: 'Continue conversation', exact: true }).click();
     assert.equal(await page.evaluate(() => document.activeElement.closest('section')?.id), 'current-question');
     await page.waitForFunction(() => {
       const question = document.querySelector('#current-question h2').getBoundingClientRect();
@@ -89,7 +89,7 @@ const web = process.env.SMOKE_FRONTEND_URL || 'http://localhost:3001';
       return question.top >= nav.bottom && question.top < innerHeight;
     });
     if (process.env.SMOKE_SCREENSHOT_DIR) await page.screenshot({ path: require('node:path').join(process.env.SMOKE_SCREENSHOT_DIR, 'phase2-mobile-question.png') });
-    await page.locator('summary').filter({ hasText: 'Saved conversation' }).click();
+
     // Failure is visible; retry retains the exact turn ID.
     let rejected;
     await page.route('**/conversation/turns', async route => {
@@ -136,6 +136,7 @@ const web = process.env.SMOKE_FRONTEND_URL || 'http://localhost:3001';
     await question.getByRole('button', { name: 'Completed', exact: true }).click();
     await question.getByRole('heading', { name: /What amount/ }).waitFor();
     await assertActions(await snapshot());
+    await question.getByText('Answer with an optional field', { exact: true }).click();
     await page.getByLabel('Amount', { exact: true }).fill('2500');
     const beforeStaleAmount = await snapshot();
     const savedElsewhere = await context.request.post(endpoint + '/turns', { data: {
@@ -152,7 +153,8 @@ const web = process.env.SMOKE_FRONTEND_URL || 'http://localhost:3001';
     await question.getByRole('button', { name: 'Not sure', exact: true }).click();
     await question.getByRole('heading', { name: /safe supporting records/ }).waitFor();
     await question.getByRole('button', { name: 'Not sure', exact: true }).click();
-    await question.getByRole('heading', { name: /answered the available questions/ }).waitFor();
+    await page.waitForFunction(() => !document.querySelector('[aria-label="Current question"]'));
+    await page.getByLabel('Add to your story or correct a detail').waitFor();
     const completionSaved = page.waitForResponse(r => r.url().endsWith('/conversation/turns') && r.request().method() === 'POST');
     const completionButton = page.getByRole('button', { name: 'Mark done: Call 1930 to report financial cyber fraud', exact: true });
     await completionButton.focus();
@@ -171,7 +173,7 @@ const web = process.env.SMOKE_FRONTEND_URL || 'http://localhost:3001';
     assert.equal(state.turns.at(-1).fact_changes.before, 'authorized');
     await assertActions(state);
     await page.reload();
-    await question.getByRole('heading', { name: /answered the available questions/ }).waitFor();
+    await page.getByLabel('Add to your story or correct a detail').waitFor();
     assert.equal(await page.getByRole('button', { name: 'Mark not done: Call 1930 to report financial cyber fraud', exact: true }).getAttribute('aria-pressed'), 'true');
     assert.deepEqual(await snapshot(), state);
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
@@ -179,20 +181,20 @@ const web = process.env.SMOKE_FRONTEND_URL || 'http://localhost:3001';
     // A 320px viewport still has one usable column and an accessible active question.
     await page.setViewportSize({ width: 320, height: 740 });
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
-    await mobileActions.getByRole('link', { name: 'Next question', exact: true }).click();
-    const questionBox = await question.boundingBox();
+    await mobileActions.getByRole('link', { name: 'Continue conversation', exact: true }).click();
+    const questionBox = await page.getByRole('region', { name: 'Incident conversation' }).boundingBox();
     assert.ok(questionBox && questionBox.width <= 320);
     await page.setViewportSize({ width: 1280, height: 900 });
     await page.evaluate(() => window.scrollTo({ top: 0, behavior: 'instant' }));
     const panelBox = await panel.boundingBox();
-    const desktopQuestion = await question.boundingBox();
+    const desktopQuestion = await page.getByRole('region', { name: 'Incident conversation' }).boundingBox();
     assert.ok(panelBox.x > desktopQuestion.x && Math.abs(panelBox.y - desktopQuestion.y) < 4);
     assert.equal(await panel.evaluate(node => getComputedStyle(node).position), 'sticky');
     if (process.env.SMOKE_SCREENSHOT_DIR) await page.screenshot({ path: require('node:path').join(process.env.SMOKE_SCREENSHOT_DIR, 'phase2-desktop-actions.png') });
     await page.getByRole('link', { name: 'Review reporting draft', exact: true }).click();
     await page.getByRole('link', { name: 'Edit answers', exact: true }).click();
     await page.waitForURL(new RegExp(`/incident/${id}/conversation$`));
-    await question.getByRole('heading', { name: /answered the available questions/ }).waitFor();
+    await page.getByLabel('Add to your story or correct a detail').waitFor();
     const outsider = await browser.newContext();
     assert.equal((await outsider.request.get(endpoint)).status(), 404);
     assert.equal((await outsider.request.post(endpoint + '/turns', { data: rejected })).status(), 404);

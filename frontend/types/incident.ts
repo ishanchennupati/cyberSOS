@@ -44,6 +44,7 @@ export type IncidentStatus =
   | "closed";
 
 export interface IncidentCreatePayload {
+  conversation_first?: boolean;
   incident_type: IncidentType;
   incident_subtype?: string | null;
   affected_person_type?: string | null;

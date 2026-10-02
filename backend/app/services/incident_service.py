@@ -90,6 +90,16 @@ def build_action_plan(incident: Incident, *, db: Session) -> ActionPlanResponse:
     if recorded is None:
         raise ValueError("No versioned financial plan recorded")
     plan = ResponsePlan.model_validate(recorded.plan)
+    if plan.facts.kind == 'incident_understanding':
+        body = 'WORKING INCIDENT NOTES — review before using on an external official service.\n'
+        body += 'Financial loss: ' + ('No known loss reported' if plan.facts.money_lost is False else 'Unknown') + '\n'
+        body += 'Possible signals: ' + (', '.join(plan.facts.signals) or 'Still gathering information') + '\n'
+        body += 'These interpreted details require your review. Preparing notes does not submit a complaint.'
+        return ActionPlanResponse(urgency=plan.urgency, urgency_label='Still gathering information',
+            core_message='Review your working understanding and applicable steps. Classification remains provisional.',
+            large_amount=False, actions=list(plan.actions), complaint_draft=ComplaintDraft(body=body),
+            playbook_id=plan.playbook_id, playbook_version=plan.playbook_version,
+            fact_schema_version=plan.fact_schema_version, plan_revision=recorded.revision, urgency_reasons=[])
     body = render_complaint_draft(incident_type=incident.incident_type,
         occurred_at=plan.facts.occurred_at, amount=plan.facts.amount,
         payment_method=plan.facts.payment_method, transaction_id=plan.facts.transaction_id,
@@ -150,8 +160,8 @@ def create_incident(db: Session, payload: IncidentCreate) -> tuple[Incident, str
     token = issue(incident)
     db.add(incident)
     db.flush()
-    if incident.incident_type == IncidentType.financial_fraud:
-        facts = FACTS_ADAPTER.validate_python({"kind": "financial_authorization_unknown", "amount": payload.amount,
+    if payload.conversation_first or incident.incident_type == IncidentType.financial_fraud:
+        facts = FACTS_ADAPTER.validate_python({"kind": "incident_understanding" if payload.conversation_first else "financial_authorization_unknown", "amount": payload.amount,
             "occurred_at": payload.incident_time, "payment_method": payload.payment_method})
         response_service.record_plan(db, incident, facts, as_of=datetime.now(timezone.utc))
         incident.status = IncidentStatus.draft

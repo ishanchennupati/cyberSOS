@@ -21,6 +21,8 @@ os.environ.update({
     "SUPABASE_SERVICE_ROLE_KEY": "",
     "ANTHROPIC_API_KEY": "",
     "ANTHROPIC_MODEL": "",
+    "GEMINI_API_KEY": "",
+    "CASE_COOKIE_SECURE": "true",
 })
 
 from app.core.config import get_settings
