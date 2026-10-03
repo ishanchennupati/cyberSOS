@@ -45,13 +45,15 @@ def test_R2_every_frontend_operation_is_mounted_once(client):
     mounted = {(m.upper(), re.sub(r"\{[^}]+\}", "{}", p)) for p, ops in app.openapi()["paths"].items() for m in ops}
     calls = []
     for name, block in re.findall(r"export function (\w+)\((.*?)(?=\nexport function|\Z)", source, re.S):
-        match = re.search(r'/(?:api/v1/|health)[^"' + chr(96) + r']*', block)
+        match = re.search(r'/(?:api/v1/|health)[^"\x27' + chr(96) + r']*', block)
         if not match:
             continue
         path = re.sub(r"\$\{[^}]+\}", "{}", match.group())
         method = re.search(r'method: [\'"](\w+)', block)
+        if method is None:
+            method = re.search(r'xhr.open\([\x27"](\w+)', block)
         calls.append((method.group(1) if method else "GET", path))
-    assert len(calls) == 27
+    assert len(calls) == 29
     assert set(calls) <= mounted, set(calls) - mounted
     routes = [(r.path, m) for r in app.routes if hasattr(r, "methods") for m in r.methods]
     assert len(routes) == len(set(routes)), "Duplicate registered method/path"

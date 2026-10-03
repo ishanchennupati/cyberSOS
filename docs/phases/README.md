@@ -1,6 +1,6 @@
 # CyberSOS revised Phase 4–12 execution prompts
 
-Agreed requirements consolidated on 2026-10-02. These are future execution
+Agreed requirements consolidated on 2026-10-02 and updated on 2026-10-04 after the Phase 4 review. These are future execution
 contracts, not evidence that their features exist. Read the root AGENTS.md,
 this shared contract and the selected phase completely in a fresh phase conversation.
 Execute one phase only. No automatic commit, push, deployment, billing or release.
@@ -10,10 +10,10 @@ Execute one phase only. No automatic commit, push, deployment, billing or releas
 | Phase | Required deliverable | Reused by |
 | --- | --- | --- |
 | [4](phase-04.md) | Direct chat, flexible grounded responses, case memory, curated RAG, attachment linkage, current plan/projection, shared UI | All later phases |
-| [5](phase-05.md) | Evidence candidates, review/conflict resolution, canonical merge and memory/projection refresh | 6–12 |
-| [6](phase-06.md) | Revision-bound ReviewedCasePacket, narrative review, export and honest handoff | 7–12 |
+| [5](phase-05.md) | Hybrid conversation, initial three-route coverage, personalized action applicability, UI refinements and evidence intelligence | 6–12 |
+| [6](phase-06.md) | Portal-field mapping, ReviewedCasePacket, narrative review, copy/export and honest handoff across three routes | 7–12 |
 | [7](phase-07.md) | Full case companion, secure long-term return and lifecycle/deletion | 8–12 |
-| [8](phase-08.md) | Reviewed broader incident coverage through the same contracts | 9–12 |
+| [8](phase-08.md) | Expand and deepen initial Phase 5 coverage through the same contracts | 9–12 |
 | [9](phase-09.md) | Multilingual voice input and reviewed language presentation in the same composer | 10–12 |
 | [10](phase-10.md) | Comprehensive security/privacy/adversarial acceptance | 11–12 |
 | [11](phase-11.md) | Authorized deployment rehearsal and supervised synthetic beta | 12 |
@@ -24,22 +24,70 @@ foundation; unified chat/composer/attachments; current artifacts and full accept
 Do not mark Phase 4 complete after only a visual redesign or only backend tests.
 Voice is required in Phase 9, not an early placeholder claim in Phase 4.
 
+## Agreed hybrid journey and delivery across entry points
+
+From Phase 5, Tell us what happened opens the same conversation with three optional
+starting choices matching the official portal: Women/Children Related Crime,
+Financial Fraud and Other Cyber Crime. Also offer Not sure and immediate free-text
+input/attachments. Voice joins in Phase 9. These are routing hints, not verified
+facts, mandatory classification or three separate bots. Allow changes and overlapping
+signals; typing a sufficient story bypasses selection without another Continue step.
+
+Hybrid means recommended answer buttons throughout an adaptive conversation,
+not three entrance buttons followed by an empty chat box. The LLM writes grounded
+normal replies and contextual optional choices, asks at most one useful follow-up,
+skips known information and accepts natural answers, uncertainty, pause and correction.
+Stable UI labels, honest failure messages and reviewed critical-action content remain
+application-controlled; the LLM does not need to generate every interface control.
+
+Build each Phase 5–9 capability across declared supported scenarios in all three
+entry points before accepting that phase. Use one shared case agent, mutation,
+memory, evidence, plan and reporting architecture. Declare supported scenarios,
+jurisdiction and restrictions before implementation; an entry-point label is not
+a claim of universal incident coverage. Initial nonfinancial support moves into
+Phase 5; Phase 8 expands it instead of introducing it for the first time.
+
+The case builds quietly during conversation. Once enough relevant information exists,
+offer concise understanding review, then a tailored fuller response plan and,
+from Phase 6, the portal-ready complaint draft. Conversation remains open afterward.
+Do not impose an intake-completion gate: individually justified urgent actions appear
+earlier, compactly. AI interprets and explains; reviewed source-backed deterministic
+policy authorizes critical actions. Unknown timing is not proof of urgency, and
+unknown authorization is not a citizen statement of uncertainty.
+
+Reviewed official retrieval supports guidance, never establishes case facts or
+authorizes critical actions. Research source freshness and applicability; preserve
+citations and safe missing-source behavior. Arbitrary search results must not become
+instructions or trigger citizen-URL fetching. Unrestricted live browsing remains
+outside agreed scope; use replaceable reviewed retrieval within free-tier limits.
+
+This approved optional-choice entrance supersedes earlier future-phase wording that
+prohibits all category choices. Story-first opportunity, no mandatory classification,
+no fixed questionnaire and deterministic critical actions remain preserved. Phase 4
+is a historical implementation contract, not an instruction to redo it now.
+
+Official-source starting points: [portal entry routes](https://cybercrime.gov.in/Webform/Index.aspx),
+[reporting FAQ](https://www.cybercrime.gov.in/webform/FAQ.aspx) and
+[citizen manuals](https://cybercrime.gov.in/webform/Citizen_Manual.aspx).
+Reverify current routes, fields and upload limits during implementation; older manuals
+alone do not establish the current form or complete-complaint import capability.
+
 ## Requirement coverage
 
 | Agreed requirement | First complete delivery | Later extensions/acceptance |
 | --- | --- | --- |
 | Direct-to-chat CTA, centered welcome, one first Send | 4 | Regression in every phase |
 | Permanent multiline composer, inline replies, mobile/accessibility, retry/drafts | 4 | 5 review, 6 report, 7 companion, 9 voice |
-| Natural NLP, relevant answers, purpose explanations, uncertainty/skip/pause, scope redirection | 4 | Domain 8, language 9, final quality 12 |
+| Natural NLP, relevant answers, purpose explanations, uncertainty/skip/pause, scope redirection | 4 | Hybrid/domain foundation 5, expansion 8, language 9, final quality 12 |
 | Per-case transcript/summary/older recall and correction freshness | 4 | Evidence 5, reporting 6, long-term return 7 |
 | Curated RAG, supported citations, source lifecycle and private isolation | 4 | Evidence 5, domain 8, language 9, security 10 |
 | Synthetic free-tier model evaluation, bounded quotas and replaceable providers | 4 | Extraction 5, drafting 6, speech 9, deployment 11 |
 | JPG/JPEG, PNG, PDF and durable authorized message attachments | 4 | Actual extraction/review 5, secure lifecycle 7 |
-| Deterministic early actions and current backend case projection | Existing foundation + 4 UX | Evidence 5, coverage 8; regression throughout |
+| Deterministic early actions and current backend case projection | Existing foundation + 4 UX | Applicability and initial coverage 5, expansion 8; regression throughout |
 | Evidence candidates/review/conflicts reaching canonical facts | 5 | Reporting 6 and later |
 | Reviewed case packet, secure export and honest official handoff | 6 | Companion 7, broader coverage 8 |
 | Full case companion, recorded references, recovery and deletion | 7 | System security 10 and operations 12 |
-| Broader incident support without separate bots | 8 | Multilingual 9, support freeze 12 |
+| Hybrid entrance and initial reviewed incident support across three routes | 5 | Expansion 8, multilingual 9, support freeze 12 |
 | Multilingual microphone, editable transcript, same pipeline | 9 | Security 10, supported-device acceptance 11–12 |
 | Privacy/safety, meaningful human-reviewed quality and UI consistency | Every phase | Comprehensive 10, synthetic beta 11, final 12 |
 
@@ -96,8 +144,11 @@ not accidentally rerun paid or rate-limited model stages.
   artifact presentation, status/errors and accessible styling across all phases.
 - Useful artifacts appear intentionally. Prefer expanded desktop panel/mobile
   sheet where practical; opening them must preserve draft and conversation access.
-- Urgent justified actions appear promptly; no empty dashboard/sidebar, form-first
-  intake, readiness percentage, giant repeated question or category picker.
+- Three optional portal entry choices appear inside chat from Phase 5; the composer
+  remains available without a mandatory category screen.
+- Urgent justified actions appear promptly and compactly; no empty dashboard/sidebar,
+  form-first intake, readiness percentage or giant repeated question. Fuller plan
+  presentation follows useful understanding review, not an arbitrary turn count.
 - Neutral investigation styling; urgent styling only for applicable urgent actions,
   completed styling for recorded completion. Include textual meaning, not color alone.
 - Keyboard navigation, focus restoration, accessible status announcements, mobile
@@ -124,6 +175,10 @@ explanations, corrections, uncertainty, skip/pause, mixed intent, distress,
 off-topic redirection, older recall and unsupported claims. Later phases add their
 evidence/report/return/voice journeys. Combine hard assertions and structured human
 review; model grading is supplementary. Record failures as well as passes.
+
+From Phase 5, maintain a route-by-scenario acceptance matrix for all three entry
+points, including Not sure/direct-story bypass, mistaken initial choice and overlaps.
+Phases 10–12 verify security, operational and final acceptance across that same matrix.
 
 Relevant research is linked in AGENTS.md §25. These prompts replace the supplied
 Phase 4–12 versions; they do not replace historical implementation reports.

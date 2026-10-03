@@ -43,19 +43,37 @@ def read_original(evidence: Evidence) -> tuple[bytes | None, str | None]:
 
 async def upload_evidence(db: Session, incident: Incident, upload: UploadFile, *,
                           evidence_type: EvidenceType, description: str | None,
-                          content_kind: EvidenceContentKind = EvidenceContentKind.general_document) -> Evidence:
+                          content_kind: EvidenceContentKind = EvidenceContentKind.general_document,
+                          upload_id: uuid.UUID | None = None, staged_for_chat: bool = False) -> Evidence:
     # Bound the application read even for requests lacking Content-Length.
     data = await upload.read(get_settings().max_evidence_file_size_bytes + 1)
     policy = POLICIES.get(incident.playbook_id, EvidencePolicy())
     policy.check(content_kind, (description or "") + " " + (upload.filename or ""))
     if upload.content_type == "text/plain":
         policy.check(content_kind, data.decode("utf-8", errors="replace"))
+    if upload_id:
+        existing = db.get(Evidence, upload_id)
+        if existing:
+            from fastapi import HTTPException
+            if existing.incident_id != incident.id:
+                raise HTTPException(404, 'Private resource not available')
+            if existing.sha256_hash != hash_service.sha256_hex(data) or existing.original_filename != upload.filename or existing.mime_type != upload.content_type:
+                raise HTTPException(409, 'Upload key was already used for a different file')
+            return existing
+    if staged_for_chat:
+        if not upload_id:
+            raise ValueError('Staged uploads require a replay key')
+        if upload.content_type not in {'image/jpeg', 'image/png', 'application/pdf'}:
+            raise ValueError('Chat attachments support JPG, PNG and PDF only')
+        cleanup_staged(db, incident.id)
     evidence = create_evidence(db, incident, filename=upload.filename or "evidence",
                               mime_type=upload.content_type or "application/octet-stream",
-                              file_bytes=data, evidence_type=evidence_type, description=description)
-    from app.services.timeline_service import log_event
-    log_event(db, incident.id, event_type="evidence_uploaded",
-              description=f"{evidence.original_filename} uploaded"[:500], source_evidence_id=evidence.id)
+                              file_bytes=data, evidence_type=evidence_type, description=description,
+                              evidence_id=upload_id, staged_for_chat=staged_for_chat)
+    if not staged_for_chat:
+        from app.services.timeline_service import log_event
+        log_event(db, incident.id, event_type="evidence_uploaded",
+                  description=f"{evidence.original_filename} uploaded"[:500], source_evidence_id=evidence.id)
     return evidence
 
 
@@ -80,6 +98,8 @@ def create_evidence(
     file_bytes: bytes,
     evidence_type: EvidenceType,
     description: str | None,
+    evidence_id: uuid.UUID | None = None,
+    staged_for_chat: bool = False,
 ) -> Evidence:
     """
     Full upload pipeline (spec section 3), minus the client-side preview
@@ -88,9 +108,11 @@ def create_evidence(
     """
     validate_evidence_file(filename=filename, mime_type=mime_type, file_bytes=file_bytes)
 
-    evidence_id = uuid.uuid4()
+    evidence_id = evidence_id or uuid.uuid4()
     digest = hash_service.sha256_hex(file_bytes)
-    storage_path = storage_service.build_storage_path(incident.id, evidence_id, filename)
+    # Each racing attempt owns a distinct object. A losing replay must never
+    # overwrite or delete the winning upload's private original.
+    storage_path = storage_service.build_storage_path(incident.id, uuid.uuid4(), filename)
 
     backend = storage_service.get_storage_backend()
     backend.upload(storage_path, file_bytes, mime_type)
@@ -108,16 +130,35 @@ def create_evidence(
         extraction_status=ExtractionStatus.pending,
         extracted_data=None,
         verification_status=VerificationStatus.unverified,
+        staged_for_chat=staged_for_chat,
     )
     db.add(evidence)
     try:
         db.commit()
-    except Exception:
+    except Exception as exc:
         db.rollback()
         backend.delete(storage_path)
+        from sqlalchemy.exc import IntegrityError
+        if isinstance(exc, IntegrityError):
+            existing = db.get(Evidence, evidence_id)
+            if existing and existing.incident_id == incident.id and existing.sha256_hash == digest and existing.original_filename == filename and existing.mime_type == mime_type:
+                return existing
+            from fastapi import HTTPException
+            raise HTTPException(409, 'Upload key conflicts with another saved file') from exc
         raise
     db.refresh(evidence)
     return evidence
+
+
+def cleanup_staged(db: Session, incident_id):
+    """Case-scoped lazy cleanup of unlinked staged originals after 24 hours."""
+    from datetime import datetime, timedelta, timezone
+    from app.models.conversation import ConversationAttachment
+    rows = list(db.scalars(select(Evidence).where(Evidence.incident_id == incident_id,
+        Evidence.staged_for_chat.is_(True), Evidence.uploaded_at < datetime.now(timezone.utc) - timedelta(hours=24),
+        ~Evidence.id.in_(select(ConversationAttachment.evidence_id)))))
+    for row in rows:
+        delete_evidence(db, row)
 
 
 def list_evidence(db: Session, incident_id: uuid.UUID) -> list[Evidence]:

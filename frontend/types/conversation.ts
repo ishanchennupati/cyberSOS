@@ -4,11 +4,13 @@ export type FactField = 'authorization' | 'ongoing_loss' | 'remote_access' | 'ac
 export type ReplyValue = string | boolean | null;
 export interface Question { field: FactField | null; priority: 'CRITICAL' | 'SUPPORTING' | 'REPORTING' | 'OPTIONAL'; question: string }
 export interface NextMove {
-  type: 'ASK_CLARIFICATION' | 'REQUEST_EVIDENCE' | 'VERIFY_INFORMATION' | 'RESOLVE_CONFLICT' | 'ACKNOWLEDGE_AND_WAIT' | 'EXPLAIN_APPROVED_ACTION' | 'CONTINUE_OPEN_CONVERSATION';
+  type: 'ASK_CLARIFICATION' | 'REQUEST_EVIDENCE' | 'VERIFY_INFORMATION' | 'RESOLVE_CONFLICT' | 'ACKNOWLEDGE_AND_WAIT' | 'EXPLAIN_APPROVED_ACTION' | 'CONTINUE_OPEN_CONVERSATION' | 'ANSWER_RELEVANT_QUESTION';
   purpose: 'containment' | 'understanding' | 'preservation' | 'reporting' | 'conflict' | 'support';
   message: string; related_field: string | null; quick_replies: string[];
   evidence_kind: 'transaction_message' | 'transaction_receipt' | 'non_explicit_conversation' | 'profile_identifier' | null;
   action_id: string | null; basis: string[];
+  fact_refs?: { field: string; value: unknown }[];
+  knowledge_refs?: { id: string; claim: string }[];
 }
 export interface TurnRequest {
   turn_id: string;
@@ -19,6 +21,7 @@ export interface TurnRequest {
   text?: string;
   timezone?: string;
   action_id?: string | null;
+  attachment_ids?: string[];
 }
 interface FinancialBase {
   money_lost: boolean | null;
@@ -50,6 +53,7 @@ export interface CandidateUnderstanding {
 export interface ConversationTurn {
   id: string; incident_id: string; role: 'user'; type: TurnRequest['type']; text: string;
   structured_reply: TurnRequest; fact_changes: { field?: FactField; before?: ReplyValue; after?: ReplyValue;
+    knowledge_sources?: { id:string; title:string; url:string; reviewed_on:string; version:string }[];
     updates?: { field: string; before: unknown; after: unknown; correction: boolean }[];
     understanding?: CandidateUnderstanding; conflicts?: string[]; acknowledgement?: string;
     next_move?: NextMove | null; agent?: { status: 'decided' | 'fallback'; reason: string | null;
@@ -57,6 +61,7 @@ export interface ConversationTurn {
       invocation_succeeded?: boolean; parsing_succeeded?: boolean; validation_succeeded?: boolean;
       proposed_type?: string | null; rejection_reason?: string | null; http_status?: number | null } };
   pending_question: Question | null; revision: number; created_at: string;
+  attachments: { id: string; original_filename: string; mime_type: string; file_size: number; deleted: boolean; preview_url: string | null }[];
 }
 export interface Completion {
   id: string; incident_id: string; plan_id: string; action_id: string; completed: boolean;
@@ -71,4 +76,8 @@ export interface ConversationState {
     sources: { id: string; authority: string; display_name: string; official_url: string; purpose: string; supported_guidance: string[]; reviewed_on: string; notes: string }[];
   } };
   completions: Completion[];
+  projection: { reference: string; revision: number; plan_revision: number; status: string;
+    working_understanding: string[]; known_facts: Record<string, {value: unknown; source_turn: string | null; origin: string; verified: boolean}>;
+    evidence_count: number; completed_actions: number; completion_meaning: string };
+  memory: { revision: number; [key: string]: unknown };
 }

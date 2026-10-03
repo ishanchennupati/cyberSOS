@@ -65,7 +65,14 @@ def generate_summary(incident_id: uuid.UUID, db: Session = Depends(get_db)):
 
 @router.post("", response_model=IncidentRead, status_code=201)
 def create_incident(payload: IncidentCreate, response: Response, db: Session = Depends(get_db)) -> IncidentRead:
-    incident, token = incident_service.create_incident(db, payload)
+    from sqlalchemy.exc import IntegrityError
+    try:
+        incident, token = incident_service.create_incident(db, payload)
+    except IntegrityError:
+        db.rollback()
+        if not payload.creation_id:
+            raise
+        incident, token = incident_service.create_incident(db, payload)
     set_cookie(response, incident, token)
     return incident
 

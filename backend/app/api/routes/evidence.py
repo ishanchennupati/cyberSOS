@@ -37,12 +37,15 @@ async def upload_evidence(
     evidence_type: EvidenceType = Form(default=EvidenceType.other_document),
     description: str | None = Form(default=None, max_length=2000),
     content_kind: EvidenceContentKind = Form(default=EvidenceContentKind.general_document),
+    upload_id: uuid.UUID | None = Form(default=None),
+    staged_for_chat: bool = Form(default=False),
     db: Session = Depends(get_db),
 ) -> EvidenceRead:
     incident = _incident(db, incident_id)
     try:
         return evidence_service.to_read(await evidence_service.upload_evidence(
             db, incident, file, evidence_type=evidence_type, description=description, content_kind=content_kind,
+            upload_id=upload_id, staged_for_chat=staged_for_chat,
         ))
     except (FileValidationError, ValueError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc

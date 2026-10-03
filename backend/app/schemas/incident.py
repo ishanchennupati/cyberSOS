@@ -64,6 +64,8 @@ def validate_other_crime_details(
 
 
 class IncidentCreate(BaseModel):
+    creation_id: uuid.UUID | None = None
+    creation_secret: str | None = Field(default=None, min_length=32, max_length=128)
     conversation_first: bool = False
     incident_type: IncidentType = IncidentType.financial_fraud
     incident_subtype: str | None = None
@@ -85,6 +87,10 @@ class IncidentCreate(BaseModel):
 
     @model_validator(mode="after")
     def validate_category_payload(self) -> "IncidentCreate":
+        if (self.creation_id is None) != (self.creation_secret is None):
+            raise ValueError('Creation key and private secret must be supplied together')
+        if self.creation_id and (not self.conversation_first or self.amount is not None or self.incident_time is not None or self.payment_method != PaymentMethod.unknown):
+            raise ValueError('Replayable creation starts an empty conversational case')
         if self.incident_type == IncidentType.other_cyber_crime and not self.incident_subtype:
             validate_other_crime_details(self.other_crime_sub_category, self.details)
         return self

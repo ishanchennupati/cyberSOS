@@ -15,10 +15,13 @@ not a real-data/public release. No automatic launch, billing or provider-data ch
 1. Freeze an evidence-backed support matrix for incident types/jurisdictions,
    languages, browsers/devices, voice, formats/extraction, return, reporting and
    handoff. Distinguish unsupported/untested from passed; no roadmap advertising.
-2. For every declared incident, verify tell story once → grounded understanding
+2. Across all three entry points and every declared incident, verify optional
+   choice/direct-story entry → adaptive recommended replies → tell story once → grounded understanding
    → useful answers/investigation → attachments reduce effort → reviewed canonical
    facts → deterministic actions → current case sheet → revision-bound reporting
-   packet → honest handoff → secure return/memory → deletion.
+   packet with applicable portal fields/copy/export → honest handoff → secure
+   return/memory → deletion. Verify concise understanding review/full-plan presentation
+   and timely compact urgent actions; no ambiguous-loss banking assumptions.
 3. Reject fixed-questionnaire behavior, repeated first-send, duplicate questions,
    vanishing composer, empty/dashboard creep, giant review forms, stale plans,
    historical chat masquerading as current truth and projection disagreements.

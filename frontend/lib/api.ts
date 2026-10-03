@@ -151,6 +151,39 @@ export function createIncident(payload: IncidentCreatePayload) {
   });
 }
 
+export function createConversationCase(creationId: string, creationSecret: string) {
+  return request<Incident>('/api/v1/incidents', { method: 'POST', signal: AbortSignal.timeout(15000),
+    body: JSON.stringify({conversation_first:true, creation_id:creationId, creation_secret:creationSecret}) });
+}
+
+export function stageChatAttachment(incidentId: string, file: File, uploadId: string,
+  signal: AbortSignal, onProgress: (percent: number) => void): Promise<Evidence> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    const form = new FormData();
+    form.append('file', file); form.append('upload_id', uploadId); form.append('staged_for_chat', 'true');
+    xhr.open('POST', `${API_URL}/api/v1/incidents/${incidentId}/evidence`);
+    xhr.withCredentials = true; xhr.timeout = 60000;
+    xhr.upload.onprogress = event => { if (event.lengthComputable) onProgress(Math.round(event.loaded / event.total * 100)); };
+    const abort = () => xhr.abort();
+    signal.addEventListener('abort', abort, {once:true});
+    const finish = () => signal.removeEventListener('abort', abort);
+    xhr.onload = () => {
+      finish();
+      try {
+        const data = JSON.parse(xhr.responseText);
+        if (xhr.status >= 200 && xhr.status < 300) resolve(resolveEvidencePreview(data));
+        else reject(new ApiError(typeof data.detail === 'string' ? data.detail : 'Attachment could not be uploaded.', xhr.status));
+      } catch { reject(new ApiError('Attachment response could not be read. Retry checks the same upload key.')); }
+    };
+    xhr.onerror = () => { finish(); reject(new ApiError('Attachment upload was interrupted. Retry to check whether it was saved.')); };
+    xhr.ontimeout = xhr.onerror;
+    xhr.onabort = () => { finish(); reject(new ApiError('Upload cancelled.')); };
+    if (signal.aborted) { finish(); reject(new ApiError('Upload cancelled.')); return; }
+    xhr.send(form);
+  });
+}
+
 export function getIncident(id: string) {
   return request<Incident>(`/api/v1/incidents/${id}`);
 }

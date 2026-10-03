@@ -27,3 +27,9 @@ class ConversationTurn(Base):
     pending_question: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     revision: Mapped[int] = mapped_column()
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class ConversationAttachment(Base):
+    __tablename__ = 'conversation_attachments'
+    evidence_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey('evidence.id', ondelete='CASCADE'), primary_key=True)
+    turn_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey('conversation_turns.id', ondelete='CASCADE'), index=True)

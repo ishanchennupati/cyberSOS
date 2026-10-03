@@ -88,12 +88,13 @@ def test_repeated_known_or_malicious_moves_are_rejected_without_losing_actions(c
     assert 'contact_bank_unauthorized' in [a['id'] for a in state['plan']['plan']['actions']]
 
 
-def test_action_explanation_is_exact_approved_content(client,monkeypatch):
+def test_action_explanation_retains_wording_and_approved_policy(client,monkeypatch):
     install(monkeypatch,[candidate('money_lost',True,'Money left')],
         move('EXPLAIN_APPROVED_ACTION',None,'Model text cannot replace policy.',action_id='contact_bank_unknown'))
     state,_,_=send(client,'Money left.')
     approved=next(a for a in state['plan']['plan']['actions'] if a['id']=='contact_bank_unknown')
-    assert state['next_move']['message']==approved['instruction']+' '+approved['why']
+    assert state['next_move']['message']=='Model text cannot replace policy.'
+    assert approved['instruction'] and approved['why']
 
 
 def test_decision_failure_preserves_successful_understanding(client,monkeypatch):

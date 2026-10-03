@@ -21,7 +21,8 @@ Current authorization remains free-tier synthetic testing; no real citizen pilot
 4. In the authorized environment, independently verify live fact extraction,
    conversational response/reasoning, RAG retrieval/claim support, evidence extraction,
    report drafting and speech where supported. One successful call is insufficient.
-5. Run synthetic homepage → direct chat → natural investigation/knowledge question
+5. Across all three entry points and direct-story/Not sure bypass, run synthetic
+   homepage → hybrid chat → contextual recommended replies/natural investigation/knowledge question
    → attachment → extraction/review → canonical merge → memory/current actions/case
    → reviewed packet/export/honest handoff → secure return → deletion.
 6. Exercise quota, timeout, provider outage, retrieval failure, malformed output,

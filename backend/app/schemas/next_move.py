@@ -4,12 +4,26 @@ from pydantic import BaseModel, ConfigDict, Field, StrictStr, model_validator
 from app.schemas.understanding import CandidateField
 
 
+class FactReference(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    field: CandidateField | Literal['occurred_at']
+    value: StrictStr | bool | list | dict | None
+
+
+class KnowledgeReference(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    id: StrictStr = Field(max_length=80)
+    claim: StrictStr = Field(min_length=1, max_length=500)
+
+
 class NextMove(BaseModel):
     model_config = ConfigDict(extra='forbid')
     type: Literal['ASK_CLARIFICATION', 'REQUEST_EVIDENCE', 'VERIFY_INFORMATION',
-        'RESOLVE_CONFLICT', 'ACKNOWLEDGE_AND_WAIT', 'EXPLAIN_APPROVED_ACTION', 'CONTINUE_OPEN_CONVERSATION']
+        'RESOLVE_CONFLICT', 'ACKNOWLEDGE_AND_WAIT', 'EXPLAIN_APPROVED_ACTION', 'CONTINUE_OPEN_CONVERSATION', 'ANSWER_RELEVANT_QUESTION']
     purpose: Literal['containment', 'understanding', 'preservation', 'reporting', 'conflict', 'support']
-    message: StrictStr = Field(min_length=1, max_length=600)
+    message: StrictStr = Field(min_length=1, max_length=1400)
+    fact_refs: list[FactReference] = Field(default_factory=list, max_length=12)
+    knowledge_refs: list[KnowledgeReference] = Field(default_factory=list, max_length=3)
     related_field: CandidateField | Literal['occurred_at', 'story'] | None
     quick_replies: list[StrictStr] = Field(max_length=4)
     evidence_kind: Literal['transaction_message', 'transaction_receipt', 'non_explicit_conversation', 'profile_identifier'] | None

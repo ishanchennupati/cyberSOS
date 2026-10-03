@@ -158,16 +158,18 @@ locals, SQL parameters, stories, evidence, cookies, keys or raw provider respons
 Raw Uvicorn access logs are suppressed in favor of sanitized route templates.
 
 After changing `.env`, restart the backend; a running process caches settings.
-For the configured hosted database, start from `backend` (no migrations at startup):
+For the configured hosted development database, apply the tracked migrations from
+`backend` before starting the updated application (no migrations at startup):
 
 ```powershell
+..\.venv\Scripts\python.exe -m alembic upgrade head
 ..\.venv\Scripts\python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload --no-access-log
 ```
 
 The local SQLite launcher above is still available when explicitly choosing local
 development storage. Existing hosted cases remain on the hosted database.
 
-Startup performs no DDL. Head is 20261001_understanding; the first baseline
+Startup performs no DDL. Head is 20261003_chat_attachments; the first baseline
 uses explicit historical DDL rather than create_all. Before an existing-schema
 upgrade, back up database and original evidence, set LOCAL_STORAGE_ROOT to the
 previous EVIDENCE_STORAGE_DIR and run alembic upgrade head from backend. Supports

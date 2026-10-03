@@ -147,5 +147,5 @@ def test_conversation_frontend_backend_contract(client):
     schema = app.openapi()['components']['schemas']
     assert schema['TurnRequest']['properties']['type']['enum'] == ['shortcut', 'answer', 'correction', 'completion', 'message']
     _, state = start(client)
-    assert set(state) == {'incident_id', 'revision', 'version', 'answered', 'facts', 'pending_question', 'next_move', 'turns', 'plan', 'completions'}
+    assert set(state) == {'incident_id', 'revision', 'version', 'answered', 'facts', 'pending_question', 'next_move', 'turns', 'plan', 'completions', 'memory', 'projection'}
     assert state['plan']['plan']['facts'] == state['facts']

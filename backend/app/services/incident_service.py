@@ -133,6 +133,18 @@ def generate_summary(incident: Incident):
 
 
 def create_incident(db: Session, payload: IncidentCreate) -> tuple[Incident, str]:
+    if payload.creation_id:
+        existing = db.get(Incident, payload.creation_id)
+        if existing:
+            import hashlib, hmac
+            from fastapi import HTTPException
+            expiry = existing.case_secret_expires_at
+            if expiry and expiry.tzinfo is None:
+                expiry = expiry.replace(tzinfo=timezone.utc)
+            if not expiry or expiry <= datetime.now(timezone.utc) or not hmac.compare_digest(
+                existing.case_secret_hash or '', hashlib.sha256(payload.creation_secret.encode()).hexdigest()):
+                raise HTTPException(404, 'Private resource not available')
+            return existing, payload.creation_secret
     check_values(payload.model_dump(mode="json"))
     incident = Incident(
         incident_type=payload.incident_type,
@@ -158,6 +170,11 @@ def create_incident(db: Session, payload: IncidentCreate) -> tuple[Incident, str
     )
     from app.services.case_access import issue
     token = issue(incident)
+    if payload.creation_id:
+        import hashlib
+        incident.id = payload.creation_id
+        token = payload.creation_secret
+        incident.case_secret_hash = hashlib.sha256(token.encode()).hexdigest()
     db.add(incident)
     db.flush()
     if payload.conversation_first or incident.incident_type == IncidentType.financial_fraud:

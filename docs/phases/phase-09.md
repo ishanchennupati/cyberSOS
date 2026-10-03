@@ -10,6 +10,11 @@ Citizens type or speak within the same CyberSOS conversation. Reviewed targets a
 English, Telugu and Hindi, with Roman Telugu, Telugu+English and Hinglish tests.
 Canonical facts and action policy remain language-independent.
 
+Deliver voice across supported scenarios in all three entry points, preserving
+the hybrid flow: citizens can tap an entry/recommended answer, type, attach evidence
+or speak. Do not build separate voice journeys per route or require classification
+before recording. Earlier phases must not display a fake working microphone.
+
 ## Required implementation
 
 1. Audit separately language understanding, generation, UI localization, deterministic
@@ -44,6 +49,10 @@ Canonical facts and action policy remain language-independent.
   leave typing functional and preserve safe drafts; no fake working voice control.
 
 ## Verification and acceptance
+
+Verify live synthetic voice journeys for each supported entry point, including
+Not sure/direct-story entry, recommended replies, corrections, plan review and
+reporting. Reuse the shared route-by-scenario acceptance matrix.
 
 Test synthetic speech with accents, background noise, code-mixing, names, ₹ amounts,
 dates and identifiers. Correct a transcript before Send and prove only corrected

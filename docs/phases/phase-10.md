@@ -5,6 +5,11 @@ Read root AGENTS.md and [shared contract](README.md) completely. Do NOT publicly
 launch or begin Phase 11. Earlier phases must already enforce relevant security;
 this is system acceptance, not deferred basic protection.
 
+Audit all three entry points and their declared supported scenarios, including
+incorrect routing, overlaps, hybrid recommended replies, pending/retry messages,
+plan applicability and portal-field mappings. Changing an entry hint cannot bypass
+case ownership, evidence restrictions or critical-action validation.
+
 ## Required audit and repair
 
 1. Map actual routes/resources, trust boundaries and provider payloads: chat,

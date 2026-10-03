@@ -11,6 +11,11 @@ The citizen leaves and securely returns to one continuing case. They may say
 I called the bank, I found another screenshot or I got this reference without
 restarting intake or being asked for adequately established facts.
 
+Deliver the companion across supported scenarios in all three portal entry points
+introduced in Phase 5. Reuse the quietly built case and Phase 6 reporting draft;
+this phase expands the companion, not initial case creation. Show incident-relevant
+fields without making nonfinancial citizens maintain a financial form.
+
 ## Required implementation
 
 1. Expand the existing projection/view; no second case system. Relevant known facts,
@@ -44,6 +49,10 @@ restarting intake or being asked for adequately established facts.
 - No fake bank/police tracker or separate manual case-maintenance workflow.
 
 ## Verification and acceptance
+
+Run the complete secure-return, update and lifecycle journey for supported cases
+from each entry point, including corrected routing and overlapping incidents.
+Preserve hybrid quick replies, natural input and current personalized actions.
 
 Test create → converse/review → leave → expire authority in controlled test →
 securely recover → same history/facts/memory/packet/actions → add information →

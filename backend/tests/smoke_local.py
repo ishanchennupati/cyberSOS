@@ -67,7 +67,7 @@ def main():
                "SMOKE_API_URL": f"http://localhost:{backend_port}"}
         env.update(live_configuration)
         if live_ai:
-            env['SMOKE_ASGI_APP'] = 'app.main:app'
+            env['SMOKE_ASGI_APP'] = os.environ.get('SMOKE_ASGI_APP', 'app.main:app')
         os.environ.update(env)
         from app.core.config import get_settings
         get_settings.cache_clear()

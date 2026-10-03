@@ -48,3 +48,5 @@ class Understanding(BaseModel):
     model_config = ConfigDict(extra='forbid')
     language: Literal['en', 'te', 'hi', 'te-Latn', 'hi-Latn', 'mixed', 'unknown']
     candidates: list[Candidate] = Field(max_length=32)
+    intents: list[Literal['skip','pause','resume','not_sure','question','distress','unrelated','feedback']] = Field(default_factory=list, max_length=8)
+    intent_source: str | None = Field(default=None, max_length=512)

@@ -17,6 +17,7 @@ class TurnRequest(BaseModel):
     action_id: str | None = Field(default=None, max_length=64)
     text: StrictStr | None = Field(default=None, min_length=1, max_length=8000)
     timezone: str = Field(default='Asia/Kolkata', max_length=64)
+    attachment_ids: list[UUID] = Field(default_factory=list, max_length=5)
 
     @model_validator(mode='after')
     def message_shape(self):
@@ -27,10 +28,12 @@ class TurnRequest(BaseModel):
         except (ZoneInfoNotFoundError, ValueError) as exc:
             raise ValueError('Unsupported timezone') from exc
         if self.type == 'message':
-            if self.text is None or not self.text.strip() or any(x is not None for x in (self.field, self.value, self.action_id)):
-                raise ValueError('A message contains text only')
+            if (not self.text or not self.text.strip()) and not self.attachment_ids or any(x is not None for x in (self.field, self.value, self.action_id)):
+                raise ValueError('A message contains text or attachments')
+            if len(set(self.attachment_ids)) != len(self.attachment_ids):
+                raise ValueError('Duplicate attachment references')
             check_values(self.text)
-        elif self.text is not None:
+        elif self.text is not None or self.attachment_ids:
             raise ValueError('Text is only supported for message turns')
         return self
 
@@ -47,6 +50,7 @@ class TurnRead(BaseModel):
     pending_question: FactRequirement | None
     revision: int
     created_at: datetime
+    attachments: list[dict] = Field(default_factory=list)
 
 
 class ConversationRead(BaseModel):
@@ -60,3 +64,5 @@ class ConversationRead(BaseModel):
     next_move: NextMove | None = None
     plan: PlanRevision
     completions: list[ActionCompletion]
+    projection: dict = Field(default_factory=dict)
+    memory: dict = Field(default_factory=dict)

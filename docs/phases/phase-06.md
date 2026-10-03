@@ -10,6 +10,31 @@ exports and official sources. Do NOT begin Phase 7.
 CyberSOS prepares a complaint-ready packet from reviewed case information. The
 citizen reviews what already exists rather than telling the story or filling fields again.
 
+## Portal-aligned complaint preparation across all three entry points
+
+1. Inspect the current official reporting routes and field requirements at execution
+   time. Build a versioned, source-linked mapping from canonical reviewed information
+   to applicable portal sections/labels, requiredness, formats and character limits.
+   Match the relevant fields, not every category's form at once; the initial route
+   hint alone cannot determine the final reporting route. Support declared scenarios
+   in Women/Children Related Crime, Financial Fraud and Other Cyber Crime.
+2. Build quietly from conversation and evidence, then offer understanding review and
+   a portal-ready draft without a second intake form. Populate only supported reviewed
+   facts; disclose unknowns/conflicts. Ask only useful missing reporting questions,
+   explain why, and accept corrections through the existing canonical mutation path.
+   Do not require sensitive identity documents or credentials in CyberSOS merely
+   because the official portal requests them; explain what must be entered there.
+3. Separate the citizen complaint fields/narrative from CyberSOS's response checklist.
+   Provide Copy field, Copy narrative, secure PDF/download and print with accessible
+   feedback. Preserve supported meaning and portal character limits without losing
+   original facts. Export only the revision-bound reviewed packet.
+4. Link to verified official destinations. Registration, verification and submission
+   occur on the official portal until a genuine authorized integration exists; never
+   request its OTP. Evidence-upload support is not complete-form import support.
+   Verify route-specific attachment types/limits; do not promise that uploading our
+   PDF fills or replaces the official form. Clearly label the draft as prepared by
+   CyberSOS, not an official receipt or accepted complaint.
+
 ## Required implementation
 
 1. Map each summary/export/narrative input to reviewed canonical, unreviewed candidate,
@@ -46,6 +71,12 @@ citizen reviews what already exists rather than telling the story or filling fie
   real verified integration; citizen-entered references remain Recorded by you.
 
 ## Verification and acceptance
+
+Verify portal-field mapping, relevant/irrelevant sections, unknown required fields,
+per-field copy, narrative limits and actual PDF/export output for supported scenarios
+in all three entry points. Test wrong initial choice and overlap without duplicate
+intake. Record source/version and any current-portal verification limitations; do
+not claim upload-based import without official evidence.
 
 Test canonical reviewed state → packet → live grounded draft → natural correction
 → new case revision → fresh review/export → official handoff link. Populated legacy

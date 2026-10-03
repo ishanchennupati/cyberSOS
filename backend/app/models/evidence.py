@@ -80,6 +80,7 @@ class SuspectIdentifierType(str, enum.Enum):
 
 class Evidence(Base):
     __tablename__ = "evidence"
+    staged_for_chat: Mapped[bool] = mapped_column(Boolean, default=False, server_default='false')
 
     id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4

@@ -11,6 +11,7 @@ from app.domain.facts import ApproximateTime, FACTS_ADAPTER, FactProvenance, nam
 from app.domain.policy import check_values
 from app.schemas.understanding import Understanding
 from app.services.ai_provider import get_provider, transient_provider_error
+from app.services.case_memory import recall
 
 KINDS = {'authorized': 'financial_scam_transfer', 'unauthorized': 'unauthorized_financial_transaction', 'unknown': 'financial_authorization_unknown'}
 
@@ -91,10 +92,16 @@ def interpret(message, facts, turn_id, timestamp, zone, pending_question=None, r
                 if c['field'] == 'payment_method' and c['status'] == 'needs_review' and c['value'] != 'unknown']
             if len(targets) == 1 and names_payment_verification_target(pending_question.get('message', ''), targets[0]['value']):
                 verification_candidate = {'field': 'payment_method', 'value': targets[0]['value']}
-        context = json.dumps({'facts': fact_context(facts), 'question': pending_question,
+        recalled = recall(recent_turns, message)
+        context_data = {'facts': fact_context(facts), 'question': pending_question,
             'verification_candidate': verification_candidate,
-            'recent_conversation': [{'user': turn.text[:500]} for turn in recent_turns[-4:]],
-            'timestamp': timestamp.isoformat(), 'timezone': zone})
+            'case_recall': recalled,
+            'timestamp': timestamp.isoformat(), 'timezone': zone}
+        context = json.dumps(context_data,ensure_ascii=False)
+        for group in ['older','recent']:
+            while len(context)>MAX_CONTEXT_CHARS and recalled[group]:
+                recalled[group].pop(0)
+                context=json.dumps(context_data,ensure_ascii=False)
         if len(context) > MAX_CONTEXT_CHARS:
             return facts, [], dict(fallback, reason='context_limit', category='VALIDATION_REJECTED')
         output = asyncio.run(_extract(provider, message, context, settings))
@@ -102,6 +109,10 @@ def interpret(message, facts, turn_id, timestamp, zone, pending_question=None, r
         if len(output) > settings.UNDERSTANDING_MAX_OUTPUT_CHARS:
             return facts, [], dict(fallback, reason='output_limit', category='MALFORMED_OUTPUT')
         parsed = Understanding.model_validate_json(output)
+        if parsed.intents and (not parsed.intent_source or parsed.intent_source not in message):
+            raise ValueError('Intent must quote the current message')
+        if set(parsed.intents) & {'unrelated','feedback'}:
+            parsed = parsed.model_copy(update={'candidates':[]})
         check_values(parsed.model_dump(mode='json'))
     except Exception as exc:
         # Provider errors may include user input/key; never log or expose them.
@@ -263,4 +274,5 @@ def interpret(message, facts, turn_id, timestamp, zone, pending_question=None, r
         'provider': settings.UNDERSTANDING_PROVIDER, 'model': settings.UNDERSTANDING_MODEL, 'category': None,
         'provider_initialized': True, 'invocation_succeeded': True, 'parsing_succeeded': True,
         'message': 'Working understanding from your words. You can review or correct it.',
-        'candidates': reviewed, 'conflicts': conflicts, 'resolved_reviews': resolved_reviews}
+        'candidates': reviewed, 'conflicts': conflicts, 'resolved_reviews': resolved_reviews,
+        'intents':parsed.intents, 'intent_source':parsed.intent_source}
