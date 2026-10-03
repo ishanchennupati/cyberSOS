@@ -1,9 +1,6 @@
 CyberSOS — AGENTS.md
 1. Purpose of this file
-This file is the permanent product, safety, architecture, UX, and engineering constitution for CyberSOS.
-Every implementation task must preserve the product model described here unless the user explicitly approves a change to a core invariant.
-A phase prompt defines what to work on now. This file defines what CyberSOS is ultimately supposed to become and how engineering decisions must be made.
-Do not silently change the product direction because another implementation would be easier.
+This is CyberSOS's permanent product, safety, architecture, UX and engineering constitution. Phase prompts define current work; this file defines product direction. Preserve core invariants unless the user explicitly approves a change; implementation convenience is not approval.
 1.1 Engineering agent responsibilities
 Act as a senior full-stack engineer accountable for citizen outcomes, AI, security and UX. Demonstrate this through diagnosis, implementation and verification.
 Separate evidence and assumptions; challenge weak choices while preserving the product. Delegate only when authorized and useful.
@@ -16,10 +13,10 @@ The core citizen journey is:
 1. The homepage explains CyberSOS simply.
 2. The citizen clicks Tell us what happened.
 3. A minimal ChatGPT/Claude-style CyberSOS conversation opens.
-4. The citizen explains what happened naturally.
+4. The citizen chooses an optional portal entry hint or explains what happened naturally.
 5. The AI understands as much as it safely can from that story.
 6. The AI investigates conversationally and asks only useful missing questions.
-7. The citizen may answer naturally, use optional quick replies, or attach evidence.
+7. The citizen may tap contextual recommended answers, type, attach evidence or use voice when implemented.
 8. The AI may request useful evidence conversationally when it would reduce effort or improve understanding.
 9. Evidence can be uploaded directly through the conversation composer.
 10. AI extracts useful candidate information from supported evidence.
@@ -27,9 +24,9 @@ The core citizen journey is:
 12. The canonical case state updates automatically.
 13. Deterministic safety/action policy evaluates the known facts.
 14. Urgent actions appear as soon as they are justified.
-15. Once enough useful information exists, CyberSOS presents an appropriate live response plan.
-16. A CyberSOS case sheet builds itself automatically from canonical state.
-17. Conversation + verified evidence + timeline + actions become a complaint-ready reporting packet.
+15. With sufficient understanding, offer concise citizen review and a personalized fuller plan; justified urgent help appears earlier.
+16. The case sheet builds quietly from canonical state throughout conversation.
+17. Reviewed case information becomes a complaint draft mapped to applicable official portal fields, with copy/export.
 18. CyberSOS helps the citizen hand the reviewed packet to a verified official reporting destination.
 19. If an authorized official integration becomes available in the future, the same reviewed packet should be capable of feeding that integration.
 20. The citizen can securely return later and continue working with the same case.
@@ -41,7 +38,7 @@ The citizen should primarily:
 - verify or correct information.
 The citizen should NOT primarily:
 - fill forms;
-- choose cybercrime categories;
+- classify the incident correctly before receiving help;
 - maintain case fields manually;
 - classify evidence manually;
 - repeat information already supplied;
@@ -57,14 +54,13 @@ Do not change this core product model without explicit user approval.
 The following are product invariants.
 Do not silently change them.
 3.1 Story first
-Normal incident intake begins with the citizen explaining what happened in their own words.
-Do not require category selection or a structured incident form before that opportunity.
+Inside chat offer optional Women/Children Related Crime, Financial Fraud and Other Cyber Crime choices, plus Not sure and immediate natural input. Choices are changeable, nonexclusive routing hints, not facts. No classification/form gate before the citizen speaks.
 3.2 No fixed questionnaire
 There is no universal:
 Question 1 → Question 2 → Question 3 → intake complete
 flow.
 The AI determines the most useful conversational interaction from current case context.
-Different incidents may produce completely different conversations.
+Recommended replies continue throughout adaptive conversation; citizens can always type instead. Skip known details; no required long narrative.
 3.3 AI-led investigation
 AI owns conversational understanding and investigation.
 It may:
@@ -118,9 +114,8 @@ Initially avoid showing empty:
 - dashboards;
 - response-plan sidebars;
 - case tables;
-- category pickers;
 - evidence forms.
-Let the citizen begin by talking.
+Use the optional three-choice hybrid entrance in §3.1; never a mandatory category screen.
 4.3 Permanent conversation composer
 The bottom composer is the permanent control center for the case.
 Preferred concept:
@@ -166,6 +161,7 @@ assistant message containing a question
 +
 large separate card repeating that question.
 Prefer one coherent conversational interaction with optional inline quick replies and the persistent composer.
+Share branding. Show pending messages/assistant loading; reconcile turns with the same retry key. Preserve drafts, keyboard focus and clear recovery/progress.
 4.7 Semantic UI states
 Questions and ordinary investigation should generally remain visually neutral.
 Use urgent/high-attention styling only for genuinely urgent applicable actions.
@@ -297,7 +293,7 @@ Validate supported uploads using appropriate controls including:
 - case ownership.
 Private evidence must not become publicly enumerable simply for convenience.
 9. Live Response Plan
-The response plan is dynamic.
+Personalize the living plan; review sufficient understanding before fuller presentation. Show justified urgent actions early and compactly. "I lost 5000" proves no bank payment/fraud/currency. Unknown authorization is not citizen uncertainty; unknown timing is not urgency.
 User-facing organizational groups are:
 - ACT NOW
 - PRESERVE
@@ -353,7 +349,7 @@ conversation
 - actions
   → reviewed reporting packet
   → official handoff
-AI may draft a readable reporting narrative only from reviewed information.
+Draft from reviewed facts into applicable verified portal fields, with field/narrative copy and PDF/export. Unknowns stay unknown. Never promise PDF-based form replacement; identity/OTP requirements stay on the official portal.
 Do not invent facts, dates, identities, legal conclusions, amounts, or official status.
 Until a genuine authorized direct integration exists, CyberSOS may support truthful handoff such as:
 - review;
@@ -448,24 +444,15 @@ Protect against relevant risks including:
 Do not log raw sensitive information unnecessarily.
 Use synthetic data during development and automated tests until security readiness supports broader data handling.
 17. Mandatory Engineering Method
-Do not assume a phase prompt perfectly describes the current repository.
-Before implementing substantial work:
-1. Inspect the existing implementation.
-2. Reproduce the current citizen journey or bug where possible.
-3. Identify what already works correctly.
-4. Trace the relevant frontend → API → backend → database/storage path.
-5. Identify the actual root cause or architectural gap.
-6. Evaluate reasonable implementation options.
-7. Choose the smallest robust solution that best serves the CyberSOS Core Product Outcome.
-8. Reuse good existing architecture.
-9. Avoid unnecessary rewrites, duplicate systems, and compatibility hacks.
-10. Implement the chosen solution.
-11. Run targeted tests while working.
-12. Verify the complete real user journey when stable.
-13. Report what changed and what was proven.
-Do not immediately code based only on assumptions in the prompt.
-Do not stop at investigation or a plan when the current task explicitly asks for implementation and enough evidence exists to proceed.
-Ask the user only when a missing decision is genuinely irreversible, safety-critical, externally costly, or changes the core product model.
+Do not assume prompts match the repository. For substantial work:
+1. Inspect implementation and identify working behavior.
+2. Reproduce the citizen journey/bug where possible.
+3. Trace frontend → API → backend → database/storage.
+4. Establish the root cause/gap and compare options.
+5. Choose the smallest robust solution serving the product; reuse sound architecture without unnecessary rewrites, duplicates or compatibility hacks.
+6. Implement, run targeted tests, then verify the complete real user journey.
+7. Report changes and proven behavior.
+Do not code from assumptions or stop at planning when implementation is authorized and evidence sufficient. Ask only for missing irreversible, safety-critical, externally costly or core-product decisions.
 17.1 Research and runtime evidence
 Research changing models, SDKs, official guidance and security using current primary sources. Cite evidence/tradeoffs; vendor benchmarks do not prove project suitability.
 Establish runtime directory, env-loading/overrides, redacted DB target, migrations/tables, frontend API target and provider/model. Reconcile discrepancies against the running app without exposing secrets.
@@ -507,6 +494,7 @@ Rules:
 - do not automatically commit, push, deploy, spend money, provision paid infrastructure, or enable production access unless explicitly asked;
 - stop at the requested phase boundary after verification and reporting.
 If a phase reveals that a later phase's implementation assumptions are outdated, report that clearly rather than silently changing the roadmap.
+Deliver and verify each phase capability across supported scenarios in all three routes through one system; labels do not imply universal coverage. Phase 5: hybrid/initial coverage/evidence; 6: portal reporting; 7: companion; 8: coverage expansion; 9: voice. See [phase contracts](docs/phases/README.md).
 19.1 Current development constraint
 Free-tier testing only: synthetic stories, files, images and voice, no real citizen data. No billing or silent paid fallback.
 Check account availability/limits. Gemini 3.8 Flash is provisional, not a proven winner; change configured models only in authorized scope.
@@ -551,52 +539,22 @@ NO CHANGE
 The current roadmap remains compatible.
 If a proposed change affects a Core Product Invariant, do NOT implement it automatically. Flag it for user discussion.
 22. Standard Completion Report
-Every substantial phase or repair should end with a concise report containing:
-1. Citizen Experience
-What can the citizen now do that they could not do before?
-2. Root Cause / Gap
-What was wrong, missing, or limiting before the implementation?
-3. Implementation Decision
-What approach was chosen and why?
-4. Frontend
-What materially changed?
-5. Backend / Domain / AI
-What materially changed?
-6. Database / Storage
-What materially changed?
-If none, say none.
-7. API / Contracts
-What materially changed?
-If none, say none.
-8. Security / Privacy
-What relevant boundaries were preserved or changed?
-9. Tests
-What tests were added or updated?
-10. Verification
-List the exact commands actually run and their results.
-11. Live Provider Status
-Where applicable distinguish:
-- fake/mock provider;
-- live provider;
-- not run.
-12. Manual User Journey
-State the exact manual journey the user should test next.
-13. Known Limitations
-Be explicit.
-14. Roadmap Impact
-Report:
-- REQUIRED CHANGE;
-- OPTIONAL IMPROVEMENT;
-- NO CHANGE.
-15. Core Product Check
-Explicitly state whether the implementation preserved:
-- chat-first citizen experience;
-- no form-first intake;
-- AI conversational investigation;
-- deterministic critical actions;
-- self-building case;
-- truthful external status;
-- official-handoff compatibility.
+For every substantial phase/repair, report concisely:
+1. Citizen experience gained.
+2. Root cause/gap.
+3. Decision and rationale.
+4. Frontend changes.
+5. Backend/domain/AI changes.
+6. Database/storage changes, or none.
+7. API/contract changes, or none.
+8. Security/privacy boundaries preserved/changed.
+9. Tests added/updated.
+10. Exact verification commands run and results.
+11. Provider status: fake/mock, live or not run.
+12. Exact next manual journey.
+13. Explicit limitations.
+14. Roadmap: REQUIRED CHANGE, OPTIONAL IMPROVEMENT or NO CHANGE.
+15. Explicit core check: chat-first, no form-first intake, AI investigation, deterministic critical actions, self-building case, truthful external status and official-handoff compatibility.
 23. Definition of a Good CyberSOS Change
 A good change makes CyberSOS feel more like:
 “I told CyberSOS what happened once, it understood me, asked only what mattered, helped me act safely, organized my evidence, built my case, and prepared me to report it.”
@@ -608,7 +566,7 @@ When implementation choices are ambiguous, prefer the option that reduces citize
 24. Final Architecture North Star
 The intended product architecture is conceptually:
 CITIZEN
-→ natural conversation / voice / attachments
+→ optional entry hints / recommended replies / natural conversation / voice / attachments
 → AI CASE AGENT
 → candidate understanding
 → application validation
@@ -631,4 +589,4 @@ The senior-engineer role is a project choice, not a proven best persona. The res
 - [Context engineering](https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents)
 - [RAG security](https://cheatsheetseries.owasp.org/cheatsheets/RAG_Security_Cheat_Sheet.html)
 - [AGENTS.md discovery and size limits](https://learn.chatgpt.com/docs/agent-configuration/agents-md)
-Reviewed 2026-10-02. Recheck changing facts. Stay within the loader budget; future outcomes never authorize early implementation.
+Research reviewed 2026-10-02; hybrid/phase alignment approved 2026-10-04. Recheck changing facts. Respect loader limits; future outcomes never authorize early implementation.
