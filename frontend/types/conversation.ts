@@ -1,6 +1,6 @@
 import type { ActionItem, PaymentMethod, Urgency } from './incident';
 
-export type FactField = 'authorization' | 'ongoing_loss' | 'remote_access' | 'account_compromised' | 'credentials_exposed' | 'occurred_at' | 'payment_method' | 'transaction_status' | 'amount' | 'transaction_id' | 'evidence_available' | 'money_lost';
+export type FactField = 'authorization' | 'ongoing_loss' | 'remote_access' | 'account_compromised' | 'credentials_exposed' | 'occurred_at' | 'payment_method' | 'transaction_status' | 'amount' | 'transaction_id' | 'evidence_available' | 'money_lost' | 'immediate_danger' | 'blackmail' | 'private_image_threat' | 'bank_involved';
 export type ReplyValue = string | boolean | null;
 export interface Question { field: FactField | null; priority: 'CRITICAL' | 'SUPPORTING' | 'REPORTING' | 'OPTIONAL'; question: string }
 export interface NextMove {
@@ -15,13 +15,23 @@ export interface NextMove {
 export interface TurnRequest {
   turn_id: string;
   expected_revision: number;
-  type: 'shortcut' | 'answer' | 'correction' | 'completion' | 'message';
+  type: 'shortcut' | 'answer' | 'correction' | 'completion' | 'message' | 'evidence_review' | 'route_hint' | 'case_review';
   field?: FactField | null;
   value?: ReplyValue;
   text?: string;
   timezone?: string;
   action_id?: string | null;
   attachment_ids?: string[];
+  route_hint?: 'women_children' | 'financial' | 'other' | 'not_sure';
+  review_context_id?: string;
+  evidence_review?: {attempt_id:string; decisions:{candidate_id:string; decision:'accept'|'reject'|'correct'; value?:string; resolve_conflict?:boolean}[]};
+}
+export interface EvidenceAnalysis {
+  id:string; evidence_id:string; status:'processing'|'review_needed'|'failed'; base_revision:number;
+  provider:string; model:string; failure:string|null;
+  candidates:{id:string; field:string; value:string; source_text:string; page:number|null;
+    confidence:number; uncertainty:string|null; reviewed:boolean; current_value:unknown;
+    conflict:boolean; changed_since_analysis:boolean}[];
 }
 interface FinancialBase {
   money_lost: boolean | null;
@@ -36,6 +46,8 @@ interface FinancialBase {
   transaction_status: 'pending' | 'completed' | 'unknown' | null;
   account_compromised: boolean | null; remote_access: boolean | null;
   credentials_exposed: boolean | null; ongoing_loss: boolean | null; evidence_available: boolean | null;
+  platform:string|null; message_text:string|null; threat_text:string|null; timestamp_text:string|null; recipient:string|null;
+  immediate_danger:boolean|null; blackmail:boolean|null; private_image_threat:boolean|null; bank_involved:boolean|null;
   provenance: { field: string; origin: 'user_statement' | 'user_verification' | 'evidence_extraction' | 'inference' | 'legacy' | 'ai_extraction'; evidence_id: string | null; confidence: number | null; verified: boolean; source_turn: string | null; source_text: string | null; uncertainty: string | null }[];
 }
 export type FinancialFacts = FinancialBase & (
@@ -61,7 +73,7 @@ export interface ConversationTurn {
       invocation_succeeded?: boolean; parsing_succeeded?: boolean; validation_succeeded?: boolean;
       proposed_type?: string | null; rejection_reason?: string | null; http_status?: number | null } };
   pending_question: Question | null; revision: number; created_at: string;
-  attachments: { id: string; original_filename: string; mime_type: string; file_size: number; deleted: boolean; preview_url: string | null }[];
+  attachments: { id: string; original_filename: string; mime_type: string; file_size: number; deleted: boolean; preview_url: string | null; extraction_status?:string|null }[];
 }
 export interface Completion {
   id: string; incident_id: string; plan_id: string; action_id: string; completed: boolean;
@@ -77,7 +89,10 @@ export interface ConversationState {
   } };
   completions: Completion[];
   projection: { reference: string; revision: number; plan_revision: number; status: string;
-    working_understanding: string[]; known_facts: Record<string, {value: unknown; source_turn: string | null; origin: string; verified: boolean}>;
+    working_understanding: string[]; known_facts: Record<string, {value: unknown; source_turn: string | null; origin: string; verified: boolean; evidence_id?:string|null; source_deleted?:boolean}>;
     evidence_count: number; completed_actions: number; completion_meaning: string };
   memory: { revision: number; [key: string]: unknown };
+  evidence_reviews?: EvidenceAnalysis[];
+  route_hint?: string|null;
+  understanding_review?: {available:boolean; reviewed:boolean; has_reviewed?:boolean; summary:Record<string,{value:unknown}>};
 }

@@ -7,7 +7,8 @@ import type { ActionItem } from '@/types/incident';
 export function isImmediateAction(action: ActionItem) {
   // Containment is presented as ACT NOW; reporting joins it only when the
   // playbook explicitly marks that reporting action critical.
-  return action.phase === 'CONTAIN' || (action.phase === 'REPORT' && action.critical);
+  return !!action.critical && ['critical', 'high'].includes(action.priority) &&
+    (action.phase === 'CONTAIN' || action.phase === 'REPORT');
 }
 
 interface Props {
@@ -56,19 +57,20 @@ export function ConversationActionPanel({ actions, completed, disabled, onComple
   const immediate = ordered.filter(isImmediateAction);
   const remaining = ordered.filter(a => !isImmediateAction(a));
   const phases = [
+    ['CONTAIN', 'ACT NOW'],
     ['PRESERVE', 'PRESERVE'], ['REPORT', 'REPORT'], ['FOLLOW_UP', 'FOLLOW THROUGH'],
   ] as const;
   function cards(items: ActionItem[]) {
     return <ol role="list" aria-label="Steps in response-plan order" className="list-none">{items.map(action => <ActionCard key={action.id} action={action}
       completed={completed.get(action.id) ?? false} disabled={disabled} onComplete={onComplete} />)}</ol>;
   }
-  return <section id="current-actions" aria-label="Applicable actions" className="scroll-mt-20 min-w-0 space-y-4 lg:sticky lg:top-6 lg:max-h-[calc(100dvh-3rem)] lg:overflow-y-auto lg:overscroll-contain">
-    <div><p className="font-mono text-xs uppercase tracking-widest text-ink-muted">Your response plan</p>
-      <p className="mt-2 text-sm text-ink-muted">Take these steps while we work through what happened. Done means only that you say you acted.</p></div>
-    {immediate.length > 0 && <section data-action-group="ACT NOW" aria-labelledby="act-now-heading" className="overflow-hidden rounded-lg border-2 border-urgent bg-surface shadow-card">
-      <div className="flex items-center gap-3 bg-urgent-soft px-4 py-5 text-urgent sm:px-5">
-        <Siren size={30} aria-hidden="true" /><div><h2 id="act-now-heading" tabIndex={-1} className="scroll-mt-24 font-display text-3xl font-bold">ACT NOW</h2>
-          <p className="mt-1 text-sm font-medium">Start here. Follow the numbered steps.</p></div>
+  // The conversation viewport or details pane owns scrolling. A nested desktop
+  // scroller here traps wheel events over cards instead of moving the chat.
+  return <section id="current-actions" aria-label="Applicable actions" className="scroll-mt-20 min-w-0 space-y-4">
+    {immediate.length > 0 && <section data-action-group="ACT NOW" aria-labelledby="act-now-heading" className="overflow-hidden rounded-lg border border-urgent bg-surface">
+      <div className="flex items-center gap-3 bg-urgent-soft px-4 py-3 text-urgent">
+        <Siren size={20} aria-hidden="true" /><div><h2 id="act-now-heading" tabIndex={-1} className="scroll-mt-24 text-base font-semibold">ACT NOW</h2>
+          <p className="mt-1 text-xs">Applicable urgent help · done means recorded by you.</p></div>
       </div>
       {cards(immediate)}
     </section>}

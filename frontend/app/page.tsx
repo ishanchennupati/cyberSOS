@@ -4,17 +4,18 @@ import { ClipboardList, FileSearch, ListChecks, ShieldAlert } from "lucide-react
 import { Button } from "@/components/ui/button";
 import { CaseTicket } from "@/components/case-ticket";
 import { SiteFooter } from "@/components/site-footer";
+import { Brand } from '@/components/brand';
 
 const steps = [
   {
     icon: ShieldAlert,
-    title: "Understand the urgency",
-    description: "A few quick questions tell you what needs to happen right now versus later.",
+    title: "Tell us what happened",
+    description: "Start in your own words. Answer useful missing questions at your pace.",
   },
   {
     icon: ClipboardList,
-    title: "Take the right immediate steps",
-    description: "Clear, ordered actions — blocking cards, freezing accounts, saving evidence.",
+    title: "Get relevant help",
+    description: "Applicable actions based on your case, with reviewed official sources.",
   },
   {
     icon: FileSearch,
@@ -23,8 +24,8 @@ const steps = [
   },
   {
     icon: ListChecks,
-    title: "Prepare your official complaint",
-    description: "Everything formatted and ready before you file with cybercrime.gov.in.",
+    title: "Review your case",
+    description: "Check the facts and safe records you want to use when reporting.",
   },
 ];
 
@@ -33,9 +34,9 @@ export default function HomePage() {
     <main>
       <header className="border-b border-line bg-surface">
         <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-4">
-          <span className="font-display text-lg italic text-ink">CyberSOS</span>
+          <Brand />
           <span className="hidden sm:block font-mono text-xs uppercase tracking-widest text-ink-muted">
-            Fraud response prototype
+            Cyber incident support prototype
           </span>
         </div>
       </header>
@@ -44,7 +45,7 @@ export default function HomePage() {
         <div className="grid gap-12 lg:grid-cols-[1.2fr_1fr] lg:items-center">
           <div>
             <h1 className="font-display text-[2.5rem] leading-[1.1] text-ink sm:text-[3.25rem]">
-              I&rsquo;ve been scammed.
+              Something happened online.
               <br />
               <span className="italic">What do I do now?</span>
             </h1>
@@ -85,7 +86,7 @@ export default function HomePage() {
             How CyberSOS works
           </p>
           <h2 className="mt-2 font-display text-2xl text-ink sm:text-3xl">
-            Four steps, in the order they actually matter.
+            From your story to an organized case.
           </h2>
 
           <ol className="mt-10 grid gap-8 sm:grid-cols-2">

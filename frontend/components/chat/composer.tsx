@@ -22,7 +22,7 @@ export function ChatComposer({ draft, onDraft, onSend, onFiles, busy, canSend, c
   }}>
     {children}
     <textarea ref={textarea} id="chat-message" aria-label="Message CyberSOS" rows={1} maxLength={8000} disabled={!hydrated}
-      className="block max-h-[min(168px,25dvh)] min-h-12 w-full resize-none overflow-y-auto rounded-xl border-0 bg-transparent px-3 py-3 leading-6 outline-none focus-visible:ring-2 focus-visible:ring-calm"
+      className="block max-h-[min(168px,25dvh)] min-h-12 w-full resize-none overflow-y-auto rounded-xl border-0 bg-transparent px-3 py-3 leading-6 outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-ink"
       placeholder="Message CyberSOS…" value={draft} onChange={event => onDraft(event.target.value)}
       onKeyDown={event => {
         if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
@@ -34,7 +34,7 @@ export function ChatComposer({ draft, onDraft, onSend, onFiles, busy, canSend, c
         onChange={event => { onFiles(Array.from(event.target.files ?? [])); event.target.value = ''; }} />
       <button type="button" aria-label="Attach files" disabled={busy} className={`${chatControl} inline-flex items-center gap-1`} onClick={() => picker.current?.click()}><Plus size={20} aria-hidden="true" />Attach</button>
       <span className="hidden text-xs text-ink-muted sm:inline">Shift + Enter for a new line</span>
-      <button type="submit" aria-label="Send message" disabled={!canSend || busy} className={`${chatControl} flex items-center gap-2 bg-ink text-white`}><ArrowUp size={18} aria-hidden="true" />{busy ? 'Saving…' : 'Send'}</button>
+      <button type="submit" aria-label="Send message" disabled={!canSend || busy} className={`${chatControl} flex items-center gap-2 bg-ink text-white`}><ArrowUp size={18} aria-hidden="true" />Send</button>
     </div>
   </form>;
 }

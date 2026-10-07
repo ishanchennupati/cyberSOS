@@ -41,7 +41,8 @@ test('distinct ACT NOW area uses backend critical flags and numbered determinist
     }));
     assert.ok(html.includes('aria-label="Applicable actions"'));
     const urgent = html.match(/<section[^>]*aria-labelledby="act-now-heading"[\s\S]*?<\/section>/)?.[0];
-    const expected = actions.filter(a => a.phase === 'CONTAIN' || (a.phase === 'REPORT' && a.critical));
+    const expected = actions.filter(a => a.critical && ['critical', 'high'].includes(a.priority) &&
+      (a.phase === 'CONTAIN' || a.phase === 'REPORT'));
     if (expected.length) {
       assert.ok(urgent?.includes('ACT NOW'));
       assert.deepEqual([...urgent.matchAll(/data-action-id="([^"]+)"/g)].map(m => m[1]), expected.map(a => a.id));

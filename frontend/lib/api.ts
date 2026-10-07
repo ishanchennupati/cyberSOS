@@ -21,6 +21,13 @@ import type {
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 import type { ConversationState, TurnRequest } from '@/types/conversation';
+import type { EvidenceAnalysis } from '@/types/conversation';
+
+export function analyzeChatAttachment(id:string, payload:{attempt_id:string;expected_revision:number}) {
+  return request<EvidenceAnalysis>(`/api/v1/evidence/${id}/analyze`, {
+    method: 'POST', body:JSON.stringify(payload), signal:AbortSignal.timeout(65000),
+  });
+}
 
 export function getConversation(id: string) {
   return request<ConversationState>(`/api/v1/incidents/${id}/conversation`, { signal: AbortSignal.timeout(15000), cache: 'no-store' });

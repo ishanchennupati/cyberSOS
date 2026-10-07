@@ -19,7 +19,7 @@ const base=process.env.SMOKE_FRONTEND_URL, api=process.env.SMOKE_API_URL;
       return state;}
     let state=await send('₹5,000 left my account without my approval.');
     assert.equal(state.turns.length,1);assert.equal(state.facts.authorization,'unauthorized');
-    await page.getByRole('heading',{name:'ACT NOW',exact:true}).waitFor();
+    assert.equal(await page.getByRole('heading',{name:'ACT NOW',exact:true}).count(),0); // Unknown timing is not urgency.
     const path=api+'/api/v1/incidents/'+state.incident_id+'/conversation';
     assert.equal((await(await context.request.get(path)).json()).turns.length,1);
     const composer=page.getByRole('textbox',{name:'Message CyberSOS'});
@@ -28,6 +28,7 @@ const base=process.env.SMOKE_FRONTEND_URL, api=process.env.SMOKE_API_URL;
     await page.getByRole('complementary',{name:'Current case details'}).waitFor();
     await page.getByRole('button',{name:'Close details'}).click();
     state=await send('It happened about an hour ago.');
+    await page.getByRole('heading',{name:'ACT NOW',exact:true}).waitFor();
     state=await send('Sorry, it was ₹4,500.');assert.equal(state.facts.amount,'4500');
     await page.reload();await page.getByRole('list',{name:'Saved message history'}).getByText('Sorry, it was ₹4,500.',{exact:true}).waitFor();
     assert.equal((await(await context.request.get(path)).json()).memory.facts.amount.value,'4500');
