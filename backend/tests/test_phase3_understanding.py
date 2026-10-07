@@ -47,12 +47,13 @@ def test_story_first_is_available_without_financial_assumption(client):
 def test_multilingual_candidates_normalize_without_repeated_known_question(client, monkeypatch, text, language, span):
     amount_source = '₹35,000' if '₹35,000' in text else '35k'
     path, state, payload = story(client, monkeypatch, text, [candidate('money_lost', True, span),
-        candidate('authorization', 'authorized', span), candidate('amount', '35000', amount_source)], language)
+        candidate('authorization', 'authorized', span), candidate('amount', '35000', amount_source),
+        candidate('signals', ['financial'], text)], language)
     assert state['facts']['amount'] == '35000'
     assert state['facts']['authorization'] == 'authorized'
     assert state['facts']['detected_language'] == language
     assert state['pending_question']['field'] not in {'authorization', 'amount', 'money_lost'}
-    assert 'contact_bank_scam' in [a['id'] for a in state['plan']['plan']['actions']]
+    assert 'contact_bank_scam' not in [a['id'] for a in state['plan']['plan']['actions']]  # App/authorization does not prove bank involvement.
     assert all(p['source_turn'] == payload['turn_id'] and p['source_text'] in text and not p['verified'] for p in state['facts']['provenance'])
     assert client.post(path + '/turns', json=payload).json() == state
 
@@ -73,8 +74,10 @@ def test_mixed_signals_and_non_inference(client, monkeypatch):
 
 @pytest.mark.parametrize('auth,action', [('unauthorized', 'contact_bank_unauthorized'), ('unknown', 'contact_bank_unknown')])
 def test_debit_authorization_branch(client, monkeypatch, auth, action):
-    text = 'Money left. I did not approve it.'
-    _, state, _ = story(client, monkeypatch, text, [candidate('money_lost', True, 'Money left'), candidate('authorization', auth, 'I did not approve it')])
+    text = 'Money left via UPI. I did not approve it.' if auth == 'unauthorized' else 'Money left via UPI. I am not sure whether I approved it.'
+    _, state, _ = story(client, monkeypatch, text, [candidate('money_lost', True, 'Money left'),
+        candidate('signals', ['financial'], text), candidate('payment_method', 'upi', 'UPI'),
+        candidate('authorization', auth, text.split('. ')[1])])
     assert action in [a['id'] for a in state['plan']['plan']['actions']]
 
 
@@ -142,7 +145,7 @@ def test_provider_failure_is_honest_and_structured_fallback_usable(client, monke
     assert state['pending_question']['field'] == 'money_lost'
     state = client.post(path + '/turns', json=dict(turn_id=str(uuid.uuid4()), expected_revision=1,
         type='answer', field='money_lost', value=True)).json()
-    assert 'call_1930' in [a['id'] for a in state['plan']['plan']['actions']]
+    assert 'call_1930' not in [a['id'] for a in state['plan']['plan']['actions']]  # Loss alone is not financial cyber fraud.
 
 
 def test_long_text_and_credentials_not_forwarded(client, monkeypatch):
@@ -192,7 +195,7 @@ def test_missing_fields_and_provisional_inference_do_not_become_truth(client, mo
     c.update(extraction='inference', uncertainty='Approval is not stated')
     _, state, _ = story(client, monkeypatch, 'Money left', [candidate('money_lost', True, 'Money left'), c])
     assert state['facts']['authorization'] == 'unknown'
-    assert state['pending_question']['field'] == 'authorization'
+    assert state['pending_question']['field'] is None  # Clarify the loss before assuming a payment.
     assert state['facts']['occurred_at'] is None
     assert state['facts']['currency'] is None
 
@@ -279,7 +282,7 @@ def test_message_cross_case_authorization(client, monkeypatch):
 def test_relative_time_pipeline_and_conservative_urgency(client, monkeypatch):
     text = 'Money left ten minutes ago.'
     _, state, _ = story(client, monkeypatch, text, [candidate('money_lost', True, 'Money left'),
-        candidate('time_window', 'ten minutes ago', 'ten minutes ago')])
+        candidate('time_window', 'ten minutes ago', 'ten minutes ago'), candidate('signals', ['financial'], text)])
     assert state['facts']['occurred_at'] is None
     assert state['facts']['time_window']['approximate']
     assert state['plan']['plan']['urgency'] == 'critical'
@@ -349,7 +352,7 @@ def test_rich_fact_conflict_gets_one_focused_clarification(client, monkeypatch):
     c['correction_source'] = 'Correction'
     _, state, _ = story(client, monkeypatch, 'Correction: Paytm', [c], state=state, path=path)
     assert state['facts']['payment_app'] == 'Paytm'
-    assert state['pending_question']['field'] == 'authorization'
+    assert state['pending_question']['field'] is None  # App name alone does not prove a payment rail.
 
 
 @pytest.mark.parametrize('text', ['My OTP is 123456', 'I shared OTP 123456', 'My PIN was 1234',

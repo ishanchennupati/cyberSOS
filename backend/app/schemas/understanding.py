@@ -2,14 +2,16 @@
 from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictStr, model_validator
 from app.domain.facts import Identifier
+from app.schemas.evidence_intelligence import NaturalEvidenceReview
 
 CandidateField = Literal['money_lost', 'authorization', 'amount', 'currency', 'payment_app',
     'payment_method', 'transaction_id', 'transaction_status', 'claimed_organization', 'claimed_person',
     'identifiers', 'signals', 'remote_access', 'account_compromised', 'credentials_exposed',
-    'ongoing_loss', 'evidence_available', 'evidence_mentioned', 'time_window']
+    'ongoing_loss', 'evidence_available', 'evidence_mentioned', 'time_window', 'platform',
+    'immediate_danger', 'blackmail', 'private_image_threat', 'bank_involved', 'message_text', 'threat_text', 'timestamp_text', 'recipient']
 
 BOOLEAN_CANDIDATE_FIELDS = frozenset({'money_lost', 'remote_access', 'account_compromised',
-    'credentials_exposed', 'ongoing_loss', 'evidence_available'})
+    'credentials_exposed', 'ongoing_loss', 'evidence_available', 'immediate_danger', 'blackmail', 'private_image_threat', 'bank_involved'})
 LIST_CANDIDATE_FIELDS = frozenset({'identifiers', 'signals', 'evidence_mentioned'})
 
 
@@ -50,3 +52,4 @@ class Understanding(BaseModel):
     candidates: list[Candidate] = Field(max_length=32)
     intents: list[Literal['skip','pause','resume','not_sure','question','distress','unrelated','feedback']] = Field(default_factory=list, max_length=8)
     intent_source: str | None = Field(default=None, max_length=512)
+    evidence_review: NaturalEvidenceReview | None = None

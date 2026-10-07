@@ -1,6 +1,12 @@
 # CYBERSOS — PHASE 5
 # Hybrid conversation, initial three-route coverage and evidence intelligence
 
+2026-10-07 quality audit: this phase's conversational acceptance remains open.
+The next Phase 6 execution includes a mandatory repair checkpoint for this
+foundation before any reporting implementation. See [Phase 6 prerequisite](phase-06.md)
+and [quality audit](../phase5-conversation-quality-audit.md). Do not infer completion
+from passing local infrastructure tests or silently defer these defects to Phase 8.
+
 Read root AGENTS.md and [shared contract](README.md) completely. Inspect Phase 4
 attachments, response/memory/RAG contracts, existing extraction, review, identifiers,
 timeline and canonical mutation paths. Do NOT begin Phase 6.

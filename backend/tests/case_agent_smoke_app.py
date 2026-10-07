@@ -12,7 +12,8 @@ class BrowserProvider(FakeProvider):
         fixtures = {
             '₹5,000 left my account without my approval.': [
                 candidate('money_lost', True, 'left my account'), candidate('amount', '5000', '₹5,000'),
-                candidate('currency', 'INR', '₹'), candidate('authorization', 'unauthorized', 'without my approval')],
+                candidate('currency', 'INR', '₹'), candidate('authorization', 'unauthorized', 'without my approval'),
+                candidate('signals',['financial'],'without my approval')],
             'It happened about an hour ago.': [candidate('time_window', 'about an hour ago', 'about an hour ago')],
             'Sorry, it was ₹4,500.': [dict(candidate('amount', '4500', '₹4,500'), correction_source='Sorry')],
             'I also installed AnyDesk.': [candidate('signals', ['device_compromise'], 'installed AnyDesk')],
@@ -27,8 +28,8 @@ class BrowserProvider(FakeProvider):
     async def decide(self, encoded):
         context = json.loads(encoded)
         if context['current_message'] == '5000 gone':
-            decision = move(field='authorization', message='Did you approve this payment yourself, or did it move without your approval?',
-                quick_replies=['I approved it after deception', 'I did not approve it', 'Not sure'])
+            decision = move('CONTINUE_OPEN_CONVERSATION','story',message='What happened to the money?',
+                quick_replies=['It was an online payment', 'It was an unexplained debit', 'Not sure'])
         elif context['current_message'] in {'I have an SMS screenshot.', '₹5,000 is gone from my account. I just got a message.'}:
             decision = move('REQUEST_EVIDENCE', 'evidence_available', 'Could you share the message?', evidence_kind='transaction_message')
         elif context['current_message'] == 'I also installed AnyDesk.':

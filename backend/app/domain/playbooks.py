@@ -109,6 +109,8 @@ PLAYBOOKS = MappingProxyType({**PLAYBOOKS,
 
 
 def evaluate(facts: IncidentFacts, *, as_of: datetime, version: str | None = None) -> ResponsePlan:
+    if version == '1.2.0' or version is None and (facts.kind == 'incident_understanding' or facts.money_lost is not None):
+        return evaluate_current(facts, as_of=as_of)
     version = version or ('1.1.0' if facts.time_window is not None or facts.kind == 'incident_understanding' else VERSION)
     if facts.kind == 'incident_understanding':
         # Reuse approved general preservation/report/follow-up text and sources.
@@ -124,3 +126,69 @@ def evaluate(facts: IncidentFacts, *, as_of: datetime, version: str | None = Non
             'urgency': Urgency.medium, 'actions': actions, 'reasons': ('Working incident understanding; financial loss is not established.',),
             'sources': tuple(s for s in base.sources if any(a.official_source_id == s.id for a in actions))})
     return PLAYBOOKS[(facts.kind, version)].evaluate(facts, as_of=as_of)
+
+
+def evaluate_current(facts: IncidentFacts, *, as_of: datetime) -> ResponsePlan:
+    """Shared Phase 5 policy. Hints, absent timing and candidates grant no action authority."""
+    from app.domain.facts import UnknownFinancialAuthorizationFacts
+    financial = facts.money_lost is True and 'financial' in facts.signals
+    banking = financial and (facts.bank_involved is True or facts.payment_method.value in
+        {'upi', 'bank_transfer', 'net_banking', 'debit_card', 'credit_card'})
+    base_facts = facts if facts.kind != 'incident_understanding' else UnknownFinancialAuthorizationFacts(
+        **facts.model_dump(exclude={'kind', 'authorization'}))
+    base = PLAYBOOKS[(base_facts.kind, '1.1.0')].evaluate(base_facts, as_of=as_of)
+    clock = base.evaluated_at
+    reported = facts.occurred_at or (facts.time_window.start if facts.time_window else None)
+    if reported and reported.tzinfo is None:
+        reported = reported.replace(tzinfo=timezone.utc)
+    recent = bool(reported and 0 <= (clock - reported).total_seconds() < 86400)
+    active_financial = banking and (facts.ongoing_loss is True or facts.remote_access is True or facts.transaction_status == 'pending')
+    urgency = Urgency.critical if facts.immediate_danger is True or active_financial or financial and recent else Urgency.high if facts.account_compromised is True or facts.remote_access is True else Urgency.medium
+    relevant = bool(facts.signals) or facts.blackmail is True or facts.private_image_threat is True
+    actions = []
+    for action in base.actions:
+        if action.id.startswith('contact_bank') or action.id == 'report_ongoing_access':
+            if not banking:
+                continue
+        elif action.id == 'call_1930':
+            if not financial:
+                continue
+        elif not relevant:
+            continue
+        instruction = action.instruction
+        if action.id == 'contact_bank_unknown':
+            instruction = 'Describe the reported payment and what you know about its approval. Ask your bank about applicable protective and complaint steps. Do not share passwords, PINs or OTPs.'
+        actions.append(action.model_copy(update={'priority': urgency, 'instruction': instruction,
+            'critical': bool(action.critical and (recent or active_financial or banking and (facts.account_compromised is True or facts.credentials_exposed is True))),
+            'minimum_facts': ('money_lost', 'signals') if action.id == 'call_1930' else
+                ('money_lost','signals','bank_involved' if facts.bank_involved is True else 'payment_method') if action.id.startswith('contact_bank') else action.minimum_facts}))
+
+    def add(ident, phase, title, instruction, why, source_id, minimum, critical=False, phone=None):
+        reference = source(source_id)
+        actions.append(ResponseAction(id=ident, phase=phase, priority=urgency, order=len(actions)+1,
+            title=title, instruction=instruction, why=why, minimum_facts=minimum,
+            official_source_id=source_id, critical=critical, phone=phone,
+            applicability='Supported current citizen facts: ' + ', '.join(minimum),
+            url=reference.official_url, url_label='External official source'))
+
+    if facts.immediate_danger is True:
+        add('contact_112', ActionPhase.contain, 'Get emergency help for the danger you reported',
+            "Call 112 for immediate physical danger in India. CyberSOS cannot contact emergency services for you.",
+            'You reported immediate physical danger; this is separate from financial reporting.',
+            'INDIA-EMERGENCY', ('immediate_danger',), True, '112')
+    platform_reporting = (facts.platform or '').casefold() in {'instagram','facebook','youtube','twitter','x'}
+    if platform_reporting and (set(facts.signals) & {'harassment', 'threats', 'impersonation'} or facts.blackmail is True or facts.private_image_threat is True):
+        add('report_platform_abuse', ActionPhase.report, 'Report the abusive content or profile on the platform',
+            'Use the affected platform’s reporting or flagging option for the content or profile. Keep safe identifiers and non-explicit threat text; do not upload intimate images or child abuse material here.',
+            'Platform reporting can flag content for its own review; removal is not guaranteed.',
+            'NCRP-SAFE-RECORDS', ('signals','platform'))
+    if facts.account_compromised is True and (facts.platform or '').casefold() in {'google', 'gmail', 'google account'}:
+        add('secure_google_account', ActionPhase.contain, 'Use Google’s account recovery and security guidance',
+            'Open Google’s official account recovery and security guide. Review unfamiliar activity and devices there. Enter account credentials only on the official service, never in CyberSOS.',
+            'You reported someone else accessing a Google account. Recovery and security checks belong on the account provider.',
+            'GOOGLE-ACCOUNT', ('account_compromised', 'platform'), True)
+    actions = tuple(a.model_copy(update={'order': i+1}) for i, a in enumerate(actions))
+    return base.model_copy(update={'playbook_id': facts.kind, 'playbook_version': '1.2.0', 'facts': facts,
+        'urgency': urgency, 'actions': actions,
+        'reasons': ('Priority follows supported timing and current risks. Unknown timing does not establish urgency.',),
+        'sources': tuple(source(s) for s in dict.fromkeys(a.official_source_id for a in actions if a.official_source_id))})

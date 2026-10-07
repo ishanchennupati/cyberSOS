@@ -1,5 +1,34 @@
 # Phase status
 
+## Phase 5 implementation — 2026-10-07
+
+**Quality-audit correction:** subsequent offline reproductions confirmed repeated
+fallback money questions in harassment cases, ignored plan/conclusion requests and
+lost explicit pause on understanding failure. Remaining work includes application
+conversation behavior, not solely live-provider reliability. See
+[phase5-conversation-quality-audit.md](phase5-conversation-quality-audit.md).
+
+User-approved execution order, 2026-10-07: the next Phase 6 implementation request
+must first execute and verify the conversation repair checkpoint in
+[phase-06.md](phases/phase-06.md). Reporting work cannot begin until that gate
+passes. This update records future scope/order; repairs and Phase 6 reporting
+have not been implemented by this documentation change.
+
+**IMPLEMENTED; LOCAL ACCEPTANCE PASS; COMPREHENSIVE LIVE ACCEPTANCE OPEN.**
+Hybrid entry hints, initial three-route policy and owned native-file candidate review
+are implemented through the existing conversation/canonical-case architecture.
+Final backend: 470 passed; frontend contracts: 13 passed; production build, Phase 5
+fake-provider browser, Phase 4 regression and desktop/mobile scroll tests passed.
+Configured PostgreSQL additive migration and private-storage integration passed
+(fake AI). Real PNG/JPEG/PDF extraction, natural financial conflict review and safe
+nonfinancial extraction were exercised; Roman Telugu/Hinglish two-turn live
+regressions passed. Comprehensive live quality remains open due to provider timeout
+and rejected follow-up wording; a scoped account run also failed question-field
+validation. Do not claim a clean live acceptance pass or production readiness.
+See [phase5-acceptance.md](phase5-acceptance.md) for exact commands/evidence and
+[phase5-support-matrix.md](phase5-support-matrix.md) for limits. Roadmap NO CHANGE;
+no Phase 6, model switch, billing, commit or deployment.
+
 ## Phase 3R longer-session payment repair — 2026-10-02
 
 **PASS:** canonical payment names, bounded natural confirmation/rejection and

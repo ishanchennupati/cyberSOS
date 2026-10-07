@@ -108,6 +108,13 @@ def create_evidence(
     """
     validate_evidence_file(filename=filename, mime_type=mime_type, file_bytes=file_bytes)
 
+    if evidence_id and db.get(Evidence,evidence_id) is None:
+        from app.models.conversation import ConversationTurn
+        from fastapi import HTTPException
+        for turn in db.scalars(select(ConversationTurn).where(ConversationTurn.incident_id==incident.id)):
+            if any(item['id']==str(evidence_id) for item in turn.fact_changes.get('attachments',[])):
+                raise HTTPException(409,'A deleted attachment cannot be replaced using its old upload key. Select the replacement file again.')
+
     evidence_id = evidence_id or uuid.uuid4()
     digest = hash_service.sha256_hex(file_bytes)
     # Each racing attempt owns a distinct object. A losing replay must never
@@ -172,6 +179,9 @@ def get_evidence(db: Session, evidence_id: uuid.UUID) -> Evidence | None:
 
 def update_evidence(db: Session, evidence: Evidence, payload: EvidenceUpdate) -> Evidence:
     check_values(payload.model_dump(mode="json"))
+    if payload.extracted_data is not None or payload.verification_status is not None:
+        from app.services.conversation_service import require_conversation_turn
+        require_conversation_turn(db, evidence.incident_id)
     if payload.evidence_type is not None:
         evidence.evidence_type = payload.evidence_type
     if payload.description is not None:
@@ -188,6 +198,36 @@ def update_evidence(db: Session, evidence: Evidence, payload: EvidenceUpdate) ->
 
 
 def delete_evidence(db: Session, evidence: Evidence) -> None:
+    from sqlalchemy import delete, update
+    from fastapi import HTTPException
+    from datetime import datetime, timezone
+    from app.models.conversation import ConversationState
+    from app.models.evidence import EvidenceAttempt, EvidenceReviewRecord
+    from app.domain.facts import FACTS_ADAPTER
+    from app.services.response_service import record_plan
+    incident = db.get(Incident, evidence.incident_id)
+    state = db.get(ConversationState, evidence.incident_id)
+    if state:
+        claimed = db.execute(update(ConversationState).where(ConversationState.incident_id == incident.id,
+            ConversationState.revision == state.revision).values(revision=state.revision+1))
+        if claimed.rowcount != 1:
+            db.rollback()
+            raise HTTPException(409, 'The case changed. Reload before deleting this attachment.')
+    if incident.facts:
+        data = dict(incident.facts)
+        changed = False
+        provenance = []
+        for p in data.get('provenance', []):
+            if p.get('evidence_id') == str(evidence.id):
+                p = dict(p, source_deleted=True, source_text=None)
+                changed = True
+            provenance.append(p)
+        if changed:
+            data['provenance'] = provenance
+            record_plan(db, incident, FACTS_ADAPTER.validate_python(data), as_of=datetime.now(timezone.utc))
+    attempts = select(EvidenceAttempt.id).where(EvidenceAttempt.evidence_id == evidence.id)
+    db.execute(delete(EvidenceReviewRecord).where(EvidenceReviewRecord.attempt_id.in_(attempts)))
+    db.execute(delete(EvidenceAttempt).where(EvidenceAttempt.evidence_id == evidence.id))
     backend = storage_service.get_storage_backend()
     backend.delete(evidence.storage_path)
     db.delete(evidence)

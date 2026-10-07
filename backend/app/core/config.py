@@ -44,6 +44,7 @@ class Settings(BaseSettings):
     GEMINI_API_KEY: str | None = None
     UNDERSTANDING_MODEL: str = 'gemini-3.5-flash-lite'
     UNDERSTANDING_TIMEOUT_SECONDS: float = Field(default=20, ge=0.1, le=30)
+    EVIDENCE_REVIEW_TIMEOUT_SECONDS: float = Field(default=30, ge=0.1, le=30)
     UNDERSTANDING_RETRIES: int = Field(default=1, ge=0, le=2)
     UNDERSTANDING_MAX_INPUT_CHARS: int = Field(default=8000, ge=256, le=8000)
     UNDERSTANDING_MAX_OUTPUT_CHARS: int = Field(default=24000, ge=256, le=48000)

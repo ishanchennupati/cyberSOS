@@ -35,6 +35,7 @@ def test_R3_R4_fresh_migrations_match_canonical_schema(tmp_path, monkeypatch):
             "alembic_version", "incidents", "evidence", "suspect_identifiers", "timeline_events",
             "response_plans", "action_completions",
             "conversation_states", "conversation_turns", "conversation_attachments",
+            "evidence_attempts", "evidence_reviews",
         }
         differences = compare_metadata(MigrationContext.configure(connection), Base.metadata)
         assert differences == [], differences

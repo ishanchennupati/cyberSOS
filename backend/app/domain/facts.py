@@ -23,11 +23,15 @@ class FactField(str, Enum):
     credentials_exposed = "credentials_exposed"
     ongoing_loss = "ongoing_loss"
     evidence_available = "evidence_available"
+    immediate_danger = "immediate_danger"
+    blackmail = "blackmail"
+    private_image_threat = "private_image_threat"
+    bank_involved = "bank_involved"
 
 
 class FactProvenance(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
-    field: FactField | Literal['currency', 'payment_app', 'claimed_organization', 'claimed_person', 'identifiers', 'signals', 'evidence_mentioned', 'time_window', 'detected_language']
+    field: FactField | Literal['currency', 'payment_app', 'claimed_organization', 'claimed_person', 'identifiers', 'signals', 'evidence_mentioned', 'time_window', 'detected_language', 'platform', 'message_text', 'threat_text', 'timestamp_text', 'recipient']
     origin: Literal["user_statement", "user_verification", "evidence_extraction", "inference", "legacy", "ai_extraction"]
     evidence_id: UUID | None = None
     confidence: float | None = Field(default=None, ge=0, le=1)
@@ -37,6 +41,8 @@ class FactProvenance(BaseModel):
     source_start: int | None = Field(default=None, ge=0)
     source_end: int | None = Field(default=None, ge=0)
     uncertainty: str | None = Field(default=None, max_length=256)
+    source_deleted: StrictBool = False
+    identifier_value: str | None = Field(default=None, max_length=256)
 
 
 Signal = Literal['financial', 'device_compromise', 'account_takeover', 'threats', 'harassment', 'impersonation', 'scam_attempt']
@@ -101,10 +107,19 @@ class FinancialFacts(BaseModel):
     evidence_mentioned: tuple[str, ...] = ()
     time_window: ApproximateTime | None = None
     detected_language: Literal['en', 'te', 'hi', 'te-Latn', 'hi-Latn', 'mixed', 'unknown'] = 'unknown'
+    platform: str | None = Field(default=None, max_length=128)
+    message_text: str | None = Field(default=None, max_length=2000)
+    threat_text: str | None = Field(default=None, max_length=2000)
+    timestamp_text: str | None = Field(default=None, max_length=256)
+    recipient: str | None = Field(default=None, max_length=256)
+    immediate_danger: StrictBool | None = None
+    blackmail: StrictBool | None = None
+    private_image_threat: StrictBool | None = None
+    bank_involved: StrictBool | None = None
 
     @model_validator(mode="after")
     def critical_inferences_require_review(self):
-        critical = {"authorization", "account_compromised", "remote_access", "credentials_exposed", "ongoing_loss"}
+        critical = {"authorization", "account_compromised", "remote_access", "credentials_exposed", "ongoing_loss", "immediate_danger", "blackmail", "private_image_threat", "bank_involved"}
         for p in self.provenance:
             if p.field in critical and p.origin in {"inference", "evidence_extraction"} and not p.verified and getattr(self, p.field, None) not in (None, "unknown"):
                 raise ValueError("Critical inferred facts require user verification")

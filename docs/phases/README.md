@@ -24,6 +24,15 @@ foundation; unified chat/composer/attachments; current artifacts and full accept
 Do not mark Phase 4 complete after only a visual redesign or only backend tests.
 Voice is required in Phase 9, not an early placeholder claim in Phase 4.
 
+Agreed 2026-10-07: Phase 6 execution first completes the mandatory conversation
+repair checkpoint in [its prompt](phase-06.md). Fix and verify Phase 5 repetition,
+intent-aware failure handling, stop/plan/conclusion behavior, approved-action
+presentation and supported witness/incident-switch handling before starting any
+reporting implementation. This checkpoint is ordered prerequisite work, not
+permission to build reporting on an unaccepted foundation. See the
+[quality audit](../phase5-conversation-quality-audit.md); Phase 5 remains open until
+the repair acceptance gate passes.
+
 ## Agreed hybrid journey and delivery across entry points
 
 From Phase 5, Tell us what happened opens the same conversation with three optional

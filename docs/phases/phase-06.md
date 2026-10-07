@@ -5,6 +5,87 @@ Read root AGENTS.md and [shared contract](README.md) completely. Inspect Phase 5
 canonical facts/provenance, memory and current projection plus existing summaries,
 exports and official sources. Do NOT begin Phase 7.
 
+## Mandatory prerequisite — repair conversation behavior before reporting implementation
+
+Agreed on 2026-10-07. A Phase 6 execution request includes an ordered prerequisite
+checkpoint repairing the existing Phase 5 conversation. Read
+[quality audit](../phase5-conversation-quality-audit.md),
+[Phase 5 acceptance](../phase5-acceptance.md) and current phase status first.
+Do not treat passing infrastructure/unit tests as completed conversational acceptance.
+Do not start portal mappings, reporting packet code, narrative drafting, exports or
+handoff UI until the repair checkpoint below passes. These are repairs to the shared
+conversation foundation, not deferred Phase 8 enhancements or a replacement chatbot.
+
+### Repair requirements
+
+1. Reproduce the observed money-loss fallback loop in harassment cases and the
+   ignored stop/plan/conclusion requests. Trace composer -> turn contract -> intent
+   interpretation -> response selection -> canonical memory -> rendered response.
+   Add behavioral regressions before repairing application code. Inspect actual
+   rejected synthetic proposals to distinguish unsafe output from false rejection;
+   rejection codes alone do not establish which wording was wrong.
+2. Prioritize the citizen's current request: answer a relevant question, show useful
+   current help, summarize/conclude, pause, or investigate. Persist control state
+   across reload through the existing turn/revision path. Clear stop/pause requests
+   must remain effective during understanding or follow-up failure. Do not replace
+   multilingual AI interpretation with an exhaustive phrase list; a bounded safe
+   control fallback must not create incident facts or actions.
+3. Ask only consequential relevant missing questions. Track question disposition,
+   answers, declines and repeated nonanswers; do not repeat merely because a field
+   remains unknown. A meaningful reask requires changed context or explicit citizen
+   permission. General/nonfinancial cases must not automatically receive financial
+   intake. Do not impose a fixed questionnaire, universal field checklist or turn cap.
+4. Connect natural help/plan requests to current backend-approved actions and concise
+   known-fact review in the chat. Reviewed policy owns critical instructions; the
+   application can render them and AI can explain grounded purpose. Preserve prompt
+   early urgent help, unknowns and citizen corrections. Do not require a particular
+   button before responding to a typed help request, silently mark facts reviewed,
+   or treat understanding review as later reporting/submission approval.
+5. Recognize sufficient understanding and citizen-requested conclusion: summarize
+   known facts, disclose consequential uncertainty, present applicable next steps,
+   and stop routine investigation while keeping the case open. Corrections/new
+   information may refresh facts and actions without automatically restarting intake.
+6. Replace the failure-driven question loop with an intent-aware safe fallback:
+   respect pause; provide applicable approved help or an honest limitation; ask only
+   a necessary relevant clarification. Keep drafts, replay keys, ownership and
+   canonical provenance. Retain grounding/safety checks while repairing semantic
+   field/wording mismatches; do not accept unchecked authoritative prose.
+7. Evaluate the witness request "Someone just got harassed in front of me; what
+   should I do?" Establish only consequential physical/online/safety context, who
+   is affected and whether this is a separate incident. Do not assume immediate
+   danger, silently mix third-party facts into an existing case, or invent bystander
+   instructions. Existing justified urgent policy must surface before routine intake.
+   Any needed critical guidance requires current reviewed source/policy support;
+   declare unproven coverage rather than claim universal emergency handling.
+
+### Repair acceptance gate
+
+Use synthetic data only and the existing free-tier/provider boundaries. Verify:
+
+- Live multi-turn journeys across the three initial routes: an adequate story,
+  useful follow-up/answer, correction, unknown/skip, distress, plan request,
+  summary/conclusion and reload. Human-review usefulness, reduced repetition and
+  effort alongside deterministic assertions; JSON/HTTP success alone is insufficient.
+- Exact regression: Instagram harassment -> "Why are you asking about money?" ->
+  "Enough questions. Tell me what to do now." -> "Summarize and conclude."
+  No repeated irrelevant money question; show applicable help and honor control.
+- Clear stop/pause and help requests during simulated understanding timeout,
+  follow-up timeout, malformed/rejected output and quota failure. No question loop,
+  invented facts/actions, duplicate turns or loss of saved control on reload.
+- Witness/physical-versus-online clarification and new-incident isolation; supported
+  urgent actions appear promptly without unsupported danger or banking inference.
+- Existing evidence partial/conflict review, memory freshness, action applicability,
+  ownership/replay, mobile composer and Phase 4/5 regression journeys remain correct.
+- Repeatable live understanding/follow-up quality for the declared scenarios. Record
+  actual failures, latency and provider status; mocks cannot establish live success.
+
+Publish a repair completion report and update phase status with exact evidence and
+limitations. If the gate remains unmet, finish the repair session with the gate
+explicitly open; do not proceed to reporting implementation or declare Phase 6
+complete. Once it passes, proceed to the Phase 6 scope below under the existing
+Phase 6 authorization without an additional routine approval. No automatic paid
+fallback, model switch, production access, commit, push or deployment.
+
 ## End-user result
 
 CyberSOS prepares a complaint-ready packet from reviewed case information. The

@@ -57,6 +57,46 @@ def test_provider_schema_keeps_reference_definitions_at_root():
     assert 'KnowledgeReference' in schema['$defs']
     waiting=next(variant for variant in schema['anyOf'] if variant['properties']['type'].get('enum')==['ACKNOWLEDGE_AND_WAIT'])
     assert waiting['properties']['related_field']=={'type':'null'}
+    assert all(variant['properties']['quick_replies'].get('maxItems') in (0,4) for variant in schema['anyOf'])
+
+
+def test_follow_up_generation_references_only_present_case_facts():
+    from app.services.ai_provider import provider_schema
+    case = context()
+    schema = provider_schema(NextMove, case)
+    fields = schema['$defs']['FactReference']['properties']['field']['enum']
+    assert set(fields) <= {field for field,value in case['facts'].items() if value not in (None,'unknown',[])}
+
+
+def test_contextual_app_answers_are_not_rejected_for_sentence_wording():
+    case = context()
+    proposal = NextMove.model_validate(move('CONTINUE_OPEN_CONVERSATION','story',
+        'Which app was involved?',quick_replies=['Google Pay','PhonePe','Paytm','Not sure/Skip']))
+    assert validate_move(proposal,case).quick_replies == ['Google Pay','PhonePe','Paytm','Not sure/Skip']
+
+
+def test_why_question_can_explain_the_purpose_of_approved_reporting():
+    facts=FACTS_ADAPTER.validate_python({'kind':'financial_scam_transfer','money_lost':True,
+        'signals':['financial'],'payment_method':'upi'})
+    case=build_context(facts,{},[],[],'Why are you asking that?',evaluate(facts,as_of=datetime.now(timezone.utc)),[],[])
+    proposal=NextMove.model_validate(move('ANSWER_RELEVANT_QUESTION',None,
+        'I ask so you can report the incident accurately to the correct institution.'))
+    assert validate_move(proposal,case).message == proposal.message
+
+
+def test_no_review_generation_does_not_carry_unused_review_grammar():
+    from app.schemas.understanding import Understanding
+    from app.services.ai_provider import provider_schema
+    schema=provider_schema(Understanding,context={'evidence_review':None},message='I lost 5000')
+    assert schema['properties']['evidence_review']=={'type':'null'}
+    assert 'NaturalEvidenceReview' not in schema['$defs']
+
+
+@pytest.mark.parametrize('move_type', ['ASK_CLARIFICATION', 'CONTINUE_OPEN_CONVERSATION', 'ANSWER_RELEVANT_QUESTION'])
+def test_ambiguous_loss_question_does_not_assume_a_transaction(move_type):
+    case=context('I lost 5000')
+    proposal=NextMove.model_validate(move(type=move_type,field='story' if move_type == 'CONTINUE_OPEN_CONVERSATION' else 'payment_method',message='What payment method was used for this transaction?'))
+    with pytest.raises(MoveRejected):validate_move(proposal,case)
 
 
 def test_remote_access_question_is_about_another_partys_current_access():

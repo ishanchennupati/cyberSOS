@@ -9,6 +9,7 @@ node_modules/
 .next/
 .next-check/
 .next-phase4/
+.next-scroll/
 .swc/
 out/
 next-env.d.ts
@@ -53,6 +54,7 @@ backend/test.db-journal
 !**/.env.example
 
 # OS
+.next-phase5/
 .DS_Store
 
 # Editors

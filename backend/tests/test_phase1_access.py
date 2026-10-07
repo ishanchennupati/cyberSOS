@@ -18,6 +18,7 @@ OPERATIONS = [
     ("PATCH", "evidence/{proof}", {"description": "Synthetic"}),
     ("DELETE", "evidence/{proof}", None),
     ("POST", "evidence/{proof}/extract", None),
+    ("POST", "evidence/{proof}/analyze", {"attempt_id":"11111111-1111-4111-8111-111111111111", "expected_revision":0}),
     ("POST", "evidence/{proof}/verify", {"extracted_data": {}}),
     ("GET", "evidence/{proof}/compare", None),
     ("POST", "incidents/{case}/suspects", {"type": "phone", "value": "9999900000"}),

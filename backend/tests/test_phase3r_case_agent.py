@@ -14,6 +14,11 @@ def move(type='ASK_CLARIFICATION', field='occurred_at', message='About when did 
 def install(monkeypatch, candidates, decision):
     from app.services import understanding, case_agent
     from app.services.ai_provider import FakeProvider
+    # These financial action regressions declare an actual reported cyber payment;
+    # bare-loss scenarios below deliberately omit this signal.
+    if any(c['field'] == 'authorization' and c['value'] != 'unknown' for c in candidates) and not any(c['field']=='signals' for c in candidates):
+        authorization = next(c for c in candidates if c['field']=='authorization')
+        candidates = [*candidates, candidate('signals', ['financial'], authorization['source_text'])]
     provider = FakeProvider(json.dumps({'language':'en','candidates':candidates}), next_move=json.dumps(decision))
     monkeypatch.setattr(understanding, 'get_provider', lambda: provider)
     monkeypatch.setattr(case_agent, 'get_provider', lambda: provider)
@@ -47,7 +52,7 @@ def test_exact_reproduction_is_understood_before_ai_decides(client, monkeypatch)
     context=json.loads(provider.decision_contexts[-1])
     assert context['facts']['authorization']=='unauthorized'
     assert 'money_lost' not in context['unknown_fields']
-    assert 'contact_bank_unauthorized' in [a['id'] for a in context['approved_actions']]
+    assert 'contact_bank_unauthorized' not in [a['id'] for a in context['approved_actions']]  # Generic account is not established as a bank account.
     assert state['facts']['transaction_id'] is state['facts']['occurred_at'] is None
     count=len(provider.decision_contexts)
     assert client.post(path+'/turns',json=payload).json()==state
@@ -85,13 +90,14 @@ def test_repeated_known_or_malicious_moves_are_rejected_without_losing_actions(c
     state,_,_=send(client,'₹5,000 left without approval.')
     assert state['turns'][-1]['fact_changes']['agent']['status']=='fallback'
     assert state['pending_question']['field'] not in {'money_lost','amount','authorization'}
-    assert 'contact_bank_unauthorized' in [a['id'] for a in state['plan']['plan']['actions']]
+    assert 'call_1930' in [a['id'] for a in state['plan']['plan']['actions']]  # Approved financial reporting survives rejected AI prose; bank involvement remains unknown.
 
 
 def test_action_explanation_retains_wording_and_approved_policy(client,monkeypatch):
-    install(monkeypatch,[candidate('money_lost',True,'Money left')],
+    install(monkeypatch,[candidate('money_lost',True,'Money left'), candidate('payment_method','upi','UPI'),
+        candidate('signals',['financial'],'fraud')],
         move('EXPLAIN_APPROVED_ACTION',None,'Model text cannot replace policy.',action_id='contact_bank_unknown'))
-    state,_,_=send(client,'Money left.')
+    state,_,_=send(client,'Money left via UPI after fraud.')
     approved=next(a for a in state['plan']['plan']['actions'] if a['id']=='contact_bank_unknown')
     assert state['next_move']['message']=='Model text cannot replace policy.'
     assert approved['instruction'] and approved['why']
@@ -262,7 +268,7 @@ def test_evidence_and_recent_conversation_context_are_scoped(client,monkeypatch,
     context=json.loads(provider.decision_contexts[-1])
     assert len(context['evidence'])==1
     assert context['recent_conversation'][0]['user']=='Money left.'
-    assert context['capabilities']['ai_evidence_extraction'] is False
+    assert context['capabilities']['ai_evidence_extraction'] is True
     assert state['next_move'] is None  # Never request an already uploaded record again.
 
 
@@ -395,12 +401,27 @@ def test_apology_about_another_detail_does_not_authorize_amount_overwrite(client
 
 
 
+def test_reply_can_reference_only_currently_applicable_helpline(client, monkeypatch):
+    install(monkeypatch, [candidate('money_lost', True, 'send'),
+        candidate('signals', ['financial'], 'scammer'), candidate('payment_method', 'upi', 'UPI')],
+        move('CONTINUE_OPEN_CONVERSATION', 'story', 'Would you like to look at your next steps?',
+            quick_replies=['Report to 1930', 'Wait']))
+    state, _, _ = send(client, 'A scammer made me send money via UPI.')
+    assert state['next_move']['quick_replies'][0] == 'Report to 1930'
+    install(monkeypatch, [], move('CONTINUE_OPEN_CONVERSATION', 'story', 'Would you like to continue?',
+        quick_replies=['Report to 1930']))
+    other, _, _ = send(client, 'Hello')
+    assert other['next_move'] is None
+    assert other['turns'][-1]['fact_changes']['agent']['rejection_reason'] == 'UNGROUNDED_NUMBER'
+
+
 def test_legitimate_authorization_quick_replies_survive(client, monkeypatch):
     wording = 'Did you approve this payment yourself, or did it move without your approval?'
     replies = ['I approved it after deception', 'I did not approve it', 'Not sure']
-    install(monkeypatch, [candidate('money_lost', True, 'gone'), candidate('amount', '5000', '5000')],
+    install(monkeypatch, [candidate('money_lost', True, 'gone'), candidate('amount', '5000', '5000'),
+        candidate('payment_method', 'upi', 'UPI')],
         move(field='authorization', message=wording, quick_replies=replies))
-    state, _, _ = send(client, '5000 gone')
+    state, _, _ = send(client, '5000 gone through UPI')
     assert state['next_move'] is not None
     assert state['next_move']['message'] == wording
     assert state['next_move']['quick_replies'] == replies

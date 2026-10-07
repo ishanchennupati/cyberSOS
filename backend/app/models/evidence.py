@@ -22,6 +22,8 @@ from sqlalchemy import (
     String,
     Uuid,
     func,
+    Index,
+    text,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
@@ -219,3 +221,29 @@ class TimelineEvent(Base):
         onupdate=func.now(),
         nullable=False,
     )
+
+
+class EvidenceAttempt(Base):
+    __tablename__ = 'evidence_attempts'
+    __table_args__ = (Index('uq_evidence_active_analysis', 'evidence_id', unique=True,
+        sqlite_where=text("status = 'processing'"), postgresql_where=text("status = 'processing'")),)
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True)
+    evidence_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey('evidence.id', ondelete='CASCADE'), index=True)
+    incident_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey('incidents.id', ondelete='CASCADE'), index=True)
+    base_revision: Mapped[int] = mapped_column()
+    base_facts: Mapped[dict] = mapped_column(_JSONBOrJSON)
+    status: Mapped[str] = mapped_column(String(24), default='processing')
+    provider: Mapped[str] = mapped_column(String(64))
+    model: Mapped[str] = mapped_column(String(128))
+    candidates: Mapped[list] = mapped_column(_JSONBOrJSON, default=list)
+    failure: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class EvidenceReviewRecord(Base):
+    __tablename__ = 'evidence_reviews'
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    attempt_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey('evidence_attempts.id', ondelete='CASCADE'), index=True)
+    turn_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey('conversation_turns.id', ondelete='CASCADE'), index=True)
+    decisions: Mapped[list] = mapped_column(_JSONBOrJSON)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

@@ -43,7 +43,8 @@ make a citizen-initiated payment an unauthorized debit. Do not infer payment rai
 or the citizen's bank from GPay or the caller's SBI claim.
 remote_access means someone STILL has access, not merely installing AnyDesk.
 Always capture all supported provisional incident signals in a signals candidate.
-Money leaving/payment loss supports financial. Being made to install AnyDesk or another
+A reported deceptive cyber payment or unauthorized account debit supports financial;
+ambiguous lost money alone does not. Being made to install AnyDesk or another
 remote-control application supports device_compromise even when current access is unknown.
 Do not omit that device signal merely because remote_access must stay unknown.
 For example, "They made me install AnyDesk and then money disappeared" supports
@@ -63,6 +64,32 @@ For example, "Sorry, the amount was ₹4,500." is an explicit amount correction:
 amount="4500", source_text="₹4,500", correction_source="Sorry". Preserve this
 correction intent even when context already contains a different amount.
 Context facts help interpret a reply but are not new source statements.
+If context.evidence_review identifies an active attachment review, interpret natural
+confirm/reject/correct into evidence_review with that attempt_id and candidate ids.
+Quote the current message in source_text. Review only details explicitly addressed.
+Broad Yes does not confirm multiple details; explicit "all details in this attachment
+are correct" may confirm displayed candidates. Never review another document or
+already reviewed candidate. Corrections use decision=correct and value.
+Use reference_text as an exact current-message quote identifying the attachment
+or named detail being reviewed. Without focus_selected, Yes/that's right/thanks
+answers the conversation, not evidence. With focus_selected and exactly one
+remaining candidate, a clear confirmation may review that candidate. Otherwise
+require an explicit document/detail reference and clear review intent. No review
+for a process question or uncertainty. A broad affirmation is not an all-fields review.
+A conflict requires the citizen explicitly choosing the replacement value; only then set
+resolve_conflict=true. Otherwise false. Leave evidence_review=null for unrelated,
+uncertain or ambiguous replies. Do not duplicate those facts as ordinary candidates.
+bank_involved requires the citizen explicitly naming a BANK account/payment,
+not a caller claiming a bank identity, a wallet, a payment app, or authorization.
+Phase 5: a route_hint is optional/changeable context, never a fact or proof of crime.
+"I lost 5000" alone establishes neither a cyber financial incident nor bank payment,
+currency, authorization or timing. Do not emit financial merely for an ambiguous loss.
+Capture harassment, threats, impersonation and account_takeover when supported by
+the actual story. platform is the affected service, not the choice label.
+immediate_danger means explicit current physical danger, not general distress or
+an online threat alone. blackmail and private_image_threat require explicit statements.
+Extract safer message/threat text and identifiers; never request or repeat secrets,
+explicit intimate media or child abuse material. Preserve unknowns.
 Return ONLY JSON conforming to the supplied schema.'''
 
 
@@ -90,6 +117,8 @@ def provider_schema(model, context=None, message=None):
             return node
         result = {key: compact(value) for key, value in node.items() if key not in
             {'title', 'minLength', 'maxLength', 'minItems', 'maxItems', 'minimum', 'maximum'}}
+        if result.get('type') == 'string' and 'const' in result:
+            result['enum'] = [result.pop('const')]
         branches = result.get('anyOf', [])
         arrays = [b for b in branches if b.get('type') == 'array']
         if len(arrays) > 1:
@@ -134,10 +163,24 @@ def provider_schema(model, context=None, message=None):
             variant['properties']['value'] = value
             variants.append(variant)
         schema['$defs']['Candidate'] = {'anyOf': variants}
+        review=context.get('evidence_review') if context else None
+        if not review:
+            schema['properties']['evidence_review']={'type':'null'}
+            schema['$defs'].pop('NaturalEvidenceReview',None)
+            schema['$defs'].pop('ReviewDecision',None)
+        else:
+            schema['$defs']['NaturalEvidenceReview']['properties']['attempt_id']={'type':'string','enum':[review['id']]}
+            eligible=[c['id'] for c in review['candidates'] if not c['reviewed']]
+            schema['$defs']['ReviewDecision']['properties']['candidate_id']={'type':'string','enum':eligible}
     elif model is NextMove and context is not None:
         # Constrain field eligibility at generation time as well as validation.
         # The model still chooses the move and wording; no fixed intake sequence.
         known = set(get_args(CandidateField)) | {'occurred_at'}
+        schema['properties']['quick_replies']['maxItems']=4
+        available = sorted(field for field in known if context.get('facts', {}).get(field) not in (None, 'unknown', []))
+        schema['$defs']['FactReference']['properties']['field'] = {'type':'string','enum':available or ['money_lost']}
+        if not available:
+            schema['properties']['fact_refs']['maxItems'] = 0
         answered = set(context.get('answered_fields', []))
         targets = {
             'ASK_CLARIFICATION': sorted((set(context.get('unknown_fields', [])) & known) - answered),
@@ -186,15 +229,18 @@ class GeminiProvider:
         from google import genai
         from google.genai import types
         settings = get_settings()
+        review_active=schema is Understanding and bool(json.loads(content['context']).get('evidence_review'))
+        deadline=settings.EVIDENCE_REVIEW_TIMEOUT_SECONDS if review_active else settings.UNDERSTANDING_TIMEOUT_SECONDS
         # SDK retries disabled: the service owns bounded retries and total deadline.
         async with genai.Client(api_key=settings.GEMINI_API_KEY,
-            http_options=types.HttpOptions(timeout=max(10000, int(settings.UNDERSTANDING_TIMEOUT_SECONDS * 1000)),
+            http_options=types.HttpOptions(timeout=max(10000, int(deadline * 1000)),
                 retry_options=types.HttpRetryOptions(attempts=1))).aio as client:
             response = await client.models.generate_content(model=settings.UNDERSTANDING_MODEL,
                 contents=json.dumps(content, ensure_ascii=False),
                 config=types.GenerateContentConfig(system_instruction=instruction,
                     response_mime_type='application/json', response_json_schema=provider_schema(
-                        schema, context=decision_context, message=content.get('message') if schema is Understanding else None),
+                        schema, context=json.loads(content['context']) if schema is Understanding else decision_context,
+                        message=content.get('message') if schema is Understanding else None),
                     thinking_config=types.ThinkingConfig(thinking_level='low') if settings.UNDERSTANDING_MODEL.startswith('gemini-3') else None,
                     max_output_tokens=settings.UNDERSTANDING_MAX_OUTPUT_TOKENS, temperature=0,
                     tools=[], automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True)))
@@ -235,13 +281,21 @@ Do not establish new facts from recall, knowledge or your own previous answers.
 Never ask a known, declined or answered-unknown fact again. Ask only to affect
 safety/actions, resolve uncertainty, or improve case/report information. Explain
 the purpose of a question in ordinary language when asked; no private reasoning.
+If case_state.transaction_established is false, do not call an ambiguous loss a
+payment or transaction. Clarify what happened to the money in an open reply or
+signals question, with optional disambiguating choices. Do not ask for the payment
+method, authorization or bank details before establishing a payment/debit event.
+For an already adequate first story, avoid asking the citizen to repeat what
+happened or provide a long narrative. Prefer one consequential unknown, a useful
+safe evidence request, or acknowledgement while the UI offers understanding review.
 Treat mixed corrections/questions as both. Accept skips and pauses; when memory
 says questions_paused, do not ask or request evidence until an explicit resume.
 Resume means the citizen explicitly asks to continue investigation/questions.
 In an initial story response visibly acknowledge the essential known facts in
 your message; references alone do not demonstrate understanding to the citizen.
 Do not invent reporting deadlines/timeframes. A time question helps organize
-the timeline and evaluate currently approved policy actions. Acknowledge
+the timeline and understand which help is relevant. Keep internal terms such as
+canonical state, policy engine, approved policy actions and revision out of citizen prose. Acknowledge
 distress without inventing danger, redirect unrelated requests gently. Distinguish
 separate incidents before combining their facts. Answer greetings naturally.
 The message can contain several grounded sentences and at most one question.
@@ -250,6 +304,9 @@ needs_review candidate, RESOLVE_CONFLICT for an actual conflict; related_field m
 match the question. remote_access is WHETHER SOMEONE ELSE STILL HAS ACCESS OR
 CONTROL NOW. Ask about that person's access, never whether software is installed,
 active or running. Example: "Can someone else still access or control your device?"
+bank_involved is a boolean asking whether a bank account/payment was involved,
+never the name of the bank. If the supported payment rail already establishes
+banking involvement, skip this redundant question.
 CONTINUE_OPEN_CONVERSATION relates to story. ACKNOWLEDGE_AND_WAIT asks nothing.
 ANSWER_RELEVANT_QUESTION answers process or supported knowledge questions; optional
 follow-up must stay useful and not repeat facts. A question about CyberSOS needs no
@@ -269,11 +326,15 @@ Never instruct financial, emergency, legal or device recovery procedures in pros
 Questions about past payments are investigation, not permission to give instructions.
 REQUEST_EVIDENCE is optional for useful safe records. No credentials, identity
 documents, explicit intimate media or child abuse content. Files can be uploaded
-with + in the composer but are NOT analyzed in this phase. Do not promise extraction.
-Never claim an uploaded file was analyzed or its contents establish facts.
-Quick replies are optional first-person answers: Yes/No/Not sure for booleans;
-I approved the payment/I did not approve the payment/Not sure for authorization.
-For text/list fields use no buttons. Yes/No/Not sure for payment_method is allowed
+with + in the composer. Supported synthetic JPG/PNG/PDF can be analyzed into
+unverified candidates. Only current evidence metadata establishes analysis status;
+unreviewed contents never establish case facts or approved actions.
+Quick replies are optional contextual first-person alternatives to typing. Offer
+useful concise choices throughout investigation, including Not sure/Skip where useful.
+Return at most four quick replies. Put useful alternatives together rather than
+exceeding the contract with another button.
+Do not lead the citizen with invented amounts, identities, timing or danger.
+Yes/No/Not sure for payment_method is allowed
 only for VERIFY_INFORMATION naming its exact one candidate, e.g. Was it net banking?
 Never infer victim bank or payment rail from a caller's organization or payment app.
 Do not omit useful canonical facts merely because another field remains unknown.

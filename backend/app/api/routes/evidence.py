@@ -12,6 +12,7 @@ from app.services import evidence_service, incident_service, storage_service
 from app.services.file_validation import FileValidationError
 from app.services.case_access import authorize_case_resource
 from app.domain.policy import EvidenceContentKind
+from app.schemas.evidence_intelligence import AnalyzeRequest
 
 router = APIRouter(tags=["evidence"], dependencies=[Depends(authorize_case_resource)])
 
@@ -90,6 +91,8 @@ def delete_evidence(evidence_id: uuid.UUID, db: Session = Depends(get_db)):
 @router.post("/evidence/{evidence_id}/extract", response_model=EvidenceRead)
 def extract_evidence(evidence_id: uuid.UUID, db: Session = Depends(get_db)):
     evidence = _evidence(db, evidence_id)
+    from app.services.conversation_service import require_conversation_turn
+    require_conversation_turn(db, evidence.incident_id)
     try:
         return evidence_service.to_read(evidence_service.run_extraction(db, evidence))
     except ValueError as exc:
@@ -99,7 +102,15 @@ def extract_evidence(evidence_id: uuid.UUID, db: Session = Depends(get_db)):
 @router.post("/evidence/{evidence_id}/verify", response_model=VerifyResponse)
 def verify_evidence(evidence_id: uuid.UUID, payload: VerifyRequest, db: Session = Depends(get_db)):
     evidence = _evidence(db, evidence_id)
+    from app.services.conversation_service import require_conversation_turn
+    require_conversation_turn(db, evidence.incident_id)
     return evidence_service.verify_for_incident(db, evidence, _incident(db, evidence.incident_id), payload)
+
+
+@router.post('/evidence/{evidence_id}/analyze')
+def analyze_evidence(evidence_id: uuid.UUID, payload: AnalyzeRequest, db: Session = Depends(get_db)):
+    from app.services.evidence_intelligence import analyze
+    return analyze(db, _evidence(db, evidence_id), payload)
 
 
 @router.get("/evidence/{evidence_id}/compare", response_model=ComparisonResult)

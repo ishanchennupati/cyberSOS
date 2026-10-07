@@ -7,11 +7,20 @@ The agreed requirements and supplied phase prompts are consolidated in
 are execution prompts, not completed implementation or authorization to run every
 phase. Start each major phase in a fresh conversation and execute one at a time.
 
+**Required execution order approved 2026-10-07:** the next Phase 6 run first repairs
+and verifies the existing Phase 5 conversation foundation. Repetition, irrelevant
+fallback questions, ignored stop/plan/conclusion requests and approved-help
+presentation must pass the prerequisite gate in [Phase 6](phases/phase-06.md)
+before portal mapping, packets, narratives, exports or handoff implementation begins.
+The gate also verifies declared witness/safety and separate-incident boundaries.
+This is a required roadmap sequencing change; core product invariants are unchanged.
+Documentation records the order, not a repair/Phase 6 completion claim.
+
 | Phase | Scope |
 | --- | --- |
 | [4](phases/phase-04.md) | Direct chat and first-send repair; natural responses; case memory; curated RAG; durable attachments; shared UI; current plan/projection |
-| [5](phases/phase-05.md) | Conversational evidence extraction/review, canonical merge and conflict resolution |
-| [6](phases/phase-06.md) | Reviewed reporting packet, narrative/export and honest official handoff |
+| [5](phases/phase-05.md) | Hybrid conversation, initial three-route coverage, evidence extraction/review, canonical merge and conflict resolution; conversation-quality repair remains open |
+| [6](phases/phase-06.md) | First: conversation repair acceptance gate. Then: reviewed reporting packet, narrative/export and honest official handoff |
 | [7](phases/phase-07.md) | Full companion, secure long-term return and lifecycle |
 | [8](phases/phase-08.md) | Broader reviewed incident coverage through shared architecture |
 | [9](phases/phase-09.md) | Multilingual voice input and reviewed English/Telugu/Hindi presentation |

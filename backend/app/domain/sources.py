@@ -4,6 +4,14 @@ from types import MappingProxyType
 from app.domain.response import OfficialSource
 
 SOURCES = MappingProxyType({s.id: s for s in (
+    OfficialSource(id="NCRP-SAFE-RECORDS", authority="I4C / Ministry of Home Affairs",
+        display_name="Cybercrime reporting and safe records", official_url="https://cybercrime.gov.in/Webform/FAQ.aspx",
+        purpose="Cybercrime and platform reporting", supported_guidance=("Citizens may report cybercrime on NCRP. Social media services offer reporting or flagging of objectionable content.",),
+        reviewed_on=date(2026, 10, 7), notes="FAQ reviewed; no universal anonymous reporting claim. Preserve safer non-explicit records only."),
+    OfficialSource(id="GOOGLE-ACCOUNT", authority="Google",
+        display_name="Secure a hacked or compromised Google Account", official_url="https://support.google.com/accounts/answer/6294825",
+        purpose="Google account recovery", supported_guidance=("Google provides account recovery and security review for a hacked or compromised Google Account.",),
+        reviewed_on=date(2026, 10, 7), notes="Platform-specific guidance, not a guarantee or permission to enter credentials in CyberSOS."),
     OfficialSource(id="MHA-1930", authority="Ministry of Home Affairs / PIB",
         display_name="Financial cyber fraud reporting", official_url="https://www.pib.gov.in/PressReleasePage.aspx?PRID=1814120&lang=2&reg=48",
         purpose="Financial fraud reporting", supported_guidance=("1930 assists reporting financial cyber incidents.",),

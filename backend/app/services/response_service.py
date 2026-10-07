@@ -24,7 +24,10 @@ def record_plan(db: Session, incident: Incident, facts: IncidentFacts, *, as_of:
     for provenance in facts.provenance:
         if provenance.evidence_id is not None:
             evidence = db.get(Evidence, provenance.evidence_id)
-            if evidence is None or evidence.incident_id != incident.id:
+            tombstone = provenance.source_deleted and any(p.get('evidence_id')==str(provenance.evidence_id) and
+                p.get('field')==provenance.field and p.get('source_deleted') and p.get('identifier_value')==provenance.identifier_value
+                for p in (incident.facts or {}).get('provenance',[]))
+            if evidence is not None and evidence.incident_id != incident.id or evidence is None and not tombstone:
                 raise ValueError("Fact source evidence does not belong to this case")
     plan = evaluate(facts, as_of=as_of)
     incident.plan_revision += 1

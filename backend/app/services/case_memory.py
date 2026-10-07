@@ -49,7 +49,12 @@ def derive_memory(facts, turns, conflicts, message=''):
             continue
         origin = provenance.get(field)
         summary[field] = {'value': value, 'source_turn': str(origin.source_turn) if origin and origin.source_turn else None,
-            'origin': origin.origin if origin else 'canonical', 'verified': bool(origin and origin.verified)}
+            'origin': origin.origin if origin else 'canonical', 'verified': bool(origin and origin.verified),
+            'evidence_id':str(origin.evidence_id) if origin and origin.evidence_id else None,
+            'source_deleted':bool(origin and origin.source_deleted)}
+        if field == 'identifiers':
+            summary[field]['identifier_sources'] = [p.model_dump(mode='json',exclude={'source_text','source_start','source_end'})
+                for p in facts.provenance if p.field == 'identifiers']
     declined, explanations = set(), set()
     paused = False
     for turn in turns:

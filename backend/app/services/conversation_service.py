@@ -28,6 +28,15 @@ def question(facts, answered, conflicts=()):
         return FactRequirement(field=None, priority=FactPriority.supporting,
             question='Your statements differ about ' + conflicts[0].replace('_', ' ') +
                 '. Please clarify in your own words, starting with “Correction:”.').model_dump(mode='json')
+    if facts.money_lost is True and not facts.signals and facts.payment_method.value == 'unknown':
+        return FactRequirement(field=None, priority=FactPriority.supporting,
+            question='What happened to the money—was it an online payment, an unexplained account debit, or something else?').model_dump(mode='json')
+    if 'threats' in facts.signals and facts.immediate_danger is None and 'immediate_danger' not in answered:
+        return FactRequirement(field='immediate_danger',priority=FactPriority.critical,
+            question='Are you in immediate physical danger right now?').model_dump(mode='json')
+    if 'financial' in facts.signals and facts.money_lost is True and facts.bank_involved is None and facts.payment_method.value == 'unknown' and 'bank_involved' not in answered:
+        return FactRequirement(field='bank_involved',priority=FactPriority.supporting,
+            question='Was a bank account involved in this payment or loss?').model_dump(mode='json')
     if facts.kind == 'incident_understanding':
         relevant = set()
         if 'device_compromise' in facts.signals:
@@ -60,6 +69,25 @@ def read(db, incident):
             db.rollback()
         state = db.get(ConversationState, incident.id)
     plan = response_service.latest(db, incident.id)
+    for _ in range(3):
+        current_facts = FACTS_ADAPTER.validate_python(plan.plan['facts'])
+        current_policy = evaluate(current_facts,as_of=datetime.now(timezone.utc))
+        if plan.plan['playbook_version'] == current_policy.playbook_version:
+            break
+        # Refresh outdated policy once without changing historical messages or
+        # snapshots. A read/replay never invokes an AI provider.
+        claim=db.execute(update(ConversationState).where(ConversationState.incident_id==incident.id,
+            ConversationState.revision==state.revision).values(revision=state.revision+1))
+        if claim.rowcount==1:
+            response_service.record_plan(db,incident,current_facts,as_of=current_policy.evaluated_at)
+            db.commit()
+        else:
+            db.rollback()
+        db.expire_all()
+        state=db.get(ConversationState,incident.id)
+        plan=response_service.latest(db,incident.id)
+    else:
+        raise HTTPException(409,'The case changed during its policy refresh. Reload to continue.')
     turns = list(db.scalars(select(ConversationTurn).where(ConversationTurn.incident_id == incident.id).order_by(ConversationTurn.revision)))
     from app.models.evidence import Evidence
     from app.services.case_memory import derive_memory
@@ -69,6 +97,7 @@ def read(db, incident):
     for turn in turns:
         item = TurnRead.model_validate(turn)
         item.attachments = [dict(metadata, deleted=metadata['id'] not in files,
+            extraction_status=files[metadata['id']].extraction_status.value if metadata['id'] in files else None,
             preview_url=f"/api/v1/evidence/{metadata['id']}/file" if metadata['id'] in files else None)
             for metadata in turn.fact_changes.get('attachments', [])]
         history.append(item)
@@ -80,10 +109,19 @@ def read(db, incident):
         'known_facts': memory['facts'], 'evidence_count': len(evidence),
         'completed_actions': sum(item.completed for item in completions),
         'completion_meaning': 'Recorded by you'}
+    from app.services.evidence_intelligence import pending_reviews
+    hint = next((t.fact_changes['route_hint'] for t in reversed(turns) if 'route_hint' in t.fact_changes), None)
+    reviewed = next((t for t in reversed(turns) if t.type == 'case_review'), None)
+    reviewed_facts = reviewed.fact_changes.get('reviewed_facts') if reviewed else None
+    current_facts = facts.model_dump(mode='json', exclude={'provenance', 'detected_language'})
+    sufficient = bool(facts.signals)
+    review_state = {'available': sufficient, 'reviewed': reviewed_facts == current_facts,
+        'has_reviewed':reviewed is not None,'summary': memory['facts']}
     return ConversationRead(incident_id=incident.id, revision=state.revision, version=state.version,
         answered=state.answered, facts=plan.plan['facts'], pending_question=state.pending_question,
         turns=history, next_move=turns[-1].fact_changes.get('next_move') if turns else None,
-        plan=plan, completions=completions, projection=projection, memory=memory)
+        plan=plan, completions=completions, projection=projection, memory=memory,
+        evidence_reviews=pending_reviews(db, incident.id), route_hint=hint, understanding_review=review_state)
 
 
 def submit(db, incident, payload):
@@ -111,17 +149,53 @@ def submit(db, incident, payload):
     changes = {}
     timestamp = datetime.now(timezone.utc)
     conflicts = snapshot.turns[-1].fact_changes.get('conflicts', []) if snapshot.turns else []
-    if payload.type == 'message':
+    review_to_record = None
+    review_attempt = None
+    if payload.type == 'evidence_review':
+        from app.services.evidence_intelligence import merge_review
+        review_to_record = payload.evidence_review
+        facts, updates, review_attempt = merge_review(db, incident.id, facts, review_to_record, payload.turn_id)
+        changes = {'updates': updates, 'evidence_review': {'attempt_id': str(review_attempt.id),
+            'evidence_id': str(review_attempt.evidence_id), 'fields': [u['field'] for u in updates]}}
+        conflicts = [f for f in conflicts if f not in {u['field'] for u in updates}]
+        text = 'Reviewed selected attachment details.'
+    elif payload.type == 'route_hint':
+        changes = {'route_hint': payload.route_hint}
+        text = {'women_children':'Women/Children Related Crime', 'financial':'Financial Fraud',
+            'other':'Other Cyber Crime', 'not_sure':'Not sure'}[payload.route_hint]
+    elif payload.type == 'case_review':
+        if not snapshot.understanding_review.get('available'):
+            raise HTTPException(409, 'Tell us a little more before reviewing the understanding.')
+        changes = {'reviewed_facts': facts.model_dump(mode='json', exclude={'provenance', 'detected_language'})}
+        text = 'I reviewed the current understanding. Show my response plan.'
+    elif payload.type == 'message':
         text = payload.text or ''
+        active_review = None
+        remaining = [r for r in snapshot.evidence_reviews if r['status'] == 'review_needed' and any(not c['reviewed'] for c in r['candidates'])]
+        if payload.review_context_id:
+            selected = next((r for r in remaining if r['id'] == str(payload.review_context_id)),None)
+            if selected:
+                active_review = dict(selected,focus_selected=True)
+        elif len(remaining) == 1:
+            active_review = dict(remaining[0],focus_selected=remaining[0]['id'] == str(payload.review_context_id))
         stage_started = perf_counter()
         facts, updates, result = understanding.interpret(text, facts, payload.turn_id, timestamp, payload.timezone,
             (snapshot.next_move.model_dump(mode='json') if snapshot.next_move else
                 snapshot.pending_question.model_dump(mode='json') if snapshot.pending_question else None),
-            recent_turns=snapshot.turns) if text.strip() else (facts, [], {'status':'understood', 'candidates':[], 'conflicts':[], 'attachment_only':True})
+            recent_turns=snapshot.turns, review_context=active_review) if text.strip() else (facts, [], {'status':'understood', 'candidates':[], 'conflicts':[], 'attachment_only':True})
         log_ai_stage('extraction', result, (perf_counter() - stage_started) * 1000)
         resolved = {u['field'] for u in updates}
         conflicts = list(dict.fromkeys([f for f in conflicts if f not in resolved] + result['conflicts']))
         changes = {'updates': updates, 'understanding': result}
+        if result.get('evidence_review'):
+            from app.services.evidence_intelligence import merge_review
+            from app.schemas.evidence_intelligence import EvidenceReview
+            review_to_record = EvidenceReview.model_validate(result['evidence_review'])
+            facts, review_updates, review_attempt = merge_review(db, incident.id, facts, review_to_record, payload.turn_id)
+            changes['updates'] += review_updates
+            changes['evidence_review'] = {'attempt_id': str(review_attempt.id), 'evidence_id': str(review_attempt.evidence_id),
+                'fields': [u['field'] for u in review_updates]}
+            conflicts = [f for f in conflicts if f not in {u['field'] for u in review_updates}]
         if set(result.get('intents', [])) & {'skip','not_sure'}:
             target = None
             for previous in reversed(snapshot.turns):
@@ -162,7 +236,7 @@ def submit(db, incident, payload):
         if payload.type == 'correction' and field not in answered and getattr(facts, field.value) in (None, 'unknown'):
             raise HTTPException(409, 'There is no established answer to correct.')
         value = payload.value
-        boolean_fields = {'money_lost', 'ongoing_loss', 'remote_access', 'account_compromised', 'credentials_exposed', 'evidence_available'}
+        boolean_fields = {'money_lost', 'ongoing_loss', 'remote_access', 'account_compromised', 'credentials_exposed', 'evidence_available', 'bank_involved', 'immediate_danger', 'blackmail', 'private_image_threat'}
         if field.value in boolean_fields and value is not None and type(value) is not bool:
             raise ValueError('Choose Yes, No or Not sure.')
         if field.value not in boolean_fields and value is not None and type(value) is not str:
@@ -200,14 +274,20 @@ def submit(db, incident, payload):
         text = ('Completed: ' if payload.value else 'Reopened: ') + payload.action_id
     # Facts and deterministic actions exist BEFORE AI chooses any conversational move.
     # No provider calls on read/replay, and no model-generated action enters the plan.
-    if payload.type == 'completion':
+    if payload.type in {'completion', 'route_hint', 'case_review'}:
         pending = snapshot.pending_question.model_dump(mode='json') if snapshot.pending_question else None
         changes['next_move'] = snapshot.next_move.model_dump(mode='json') if snapshot.next_move else None
-        changes['acknowledgement'] = 'Your action update is saved.'
+        changes['acknowledgement'] = {'completion':'Your action update is saved.',
+            'route_hint':'You can change this starting choice or describe what happened in your own words. It does not classify your case.',
+            'case_review':'Your current understanding is reviewed. Your response plan is available; you can keep talking and correct anything.'}[payload.type]
+        if payload.type in {'route_hint', 'case_review'}:
+            changes['next_move'] = None
+            pending = None
     else:
         plan = evaluate(facts, as_of=timestamp)
         from app.models.evidence import Evidence
-        evidence = [{'type': row.evidence_type.value, 'verification': row.verification_status.value}
+        evidence = [{'type': row.evidence_type.value, 'verification': row.verification_status.value,
+            'analysis': row.extraction_status.value}
             for row in db.scalars(select(Evidence).where(Evidence.incident_id == incident.id).limit(20))]
         result = changes.get('understanding', {})
         declined = case_agent.declined_fields(snapshot.turns) - {u['field'] for u in changes.get('updates', [])}
@@ -229,6 +309,7 @@ def submit(db, incident, payload):
                 evidence, decision_answered,
                 snapshot.next_move.model_dump(mode='json') if snapshot.next_move else None)
             context['user_intents'] = result.get('intents', [])
+            context['route_hint'] = snapshot.route_hint
             if 'pause' in context['user_intents']: context['memory']['questions_paused'] = True
             if 'resume' in context['user_intents']: context['memory']['questions_paused'] = False
             stage_started = perf_counter()
@@ -271,7 +352,7 @@ def submit(db, incident, payload):
         if result.rowcount != 1:
             db.rollback()
             raise HTTPException(409, 'Conversation changed. Reload before sending.')
-        if payload.type in {'answer', 'correction', 'message', 'shortcut'}:
+        if payload.type in {'answer', 'correction', 'message', 'shortcut', 'evidence_review'}:
             response_service.record_plan(db, incident, facts, as_of=timestamp)
         elif payload.type == 'completion':
             row = db.scalar(select(ActionCompletionRecord).where(ActionCompletionRecord.plan_id == snapshot.plan.id,
@@ -285,6 +366,9 @@ def submit(db, incident, payload):
             text=text, structured_reply=serialized, fact_changes=changes, pending_question=pending,
             revision=payload.expected_revision + 1, created_at=timestamp))
         db.flush()
+        if review_to_record:
+            from app.services.evidence_intelligence import record_review
+            record_review(db, review_attempt, review_to_record, payload.turn_id)
         for item in attachments:
             db.add(ConversationAttachment(evidence_id=item.id, turn_id=payload.turn_id))
             item.staged_for_chat = False

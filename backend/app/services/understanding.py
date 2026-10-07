@@ -68,10 +68,12 @@ async def _extract(provider, message, context, settings):
                 log_event('ai_retry', stage='extraction', attempt=attempt + 1,
                           error_type=type(exc).__name__, http_status=getattr(exc, 'code', None))
                 await asyncio.sleep(0.25)
-    return await asyncio.wait_for(attempts(), timeout=settings.UNDERSTANDING_TIMEOUT_SECONDS)
+    review_active=bool(json.loads(context).get('evidence_review'))
+    deadline=settings.EVIDENCE_REVIEW_TIMEOUT_SECONDS if review_active else settings.UNDERSTANDING_TIMEOUT_SECONDS
+    return await asyncio.wait_for(attempts(), timeout=deadline)
 
 
-def interpret(message, facts, turn_id, timestamp, zone, pending_question=None, recent_turns=()):
+def interpret(message, facts, turn_id, timestamp, zone, pending_question=None, recent_turns=(), review_context=None):
     settings = get_settings()
     fallback = {'status': 'fallback', 'message': 'Automatic understanding is unavailable. Please answer one focused question; you can still continue.', 'candidates': [], 'conflicts': [],
         'provider_initialized': False, 'invocation_succeeded': False, 'parsing_succeeded': False,
@@ -97,6 +99,7 @@ def interpret(message, facts, turn_id, timestamp, zone, pending_question=None, r
             'verification_candidate': verification_candidate,
             'case_recall': recalled,
             'timestamp': timestamp.isoformat(), 'timezone': zone}
+        context_data['evidence_review'] = review_context
         context = json.dumps(context_data,ensure_ascii=False)
         for group in ['older','recent']:
             while len(context)>MAX_CONTEXT_CHARS and recalled[group]:
@@ -170,7 +173,7 @@ def interpret(message, facts, turn_id, timestamp, zone, pending_question=None, r
                 reviewed.append(item)
                 continue
             confirmed = True
-        if field in {'payment_app', 'claimed_organization', 'claimed_person', 'transaction_id'} and value.casefold() not in source.casefold():
+        if field in {'payment_app', 'claimed_organization', 'claimed_person', 'transaction_id', 'platform', 'recipient', 'message_text', 'threat_text', 'timestamp_text'} and value.casefold() not in source.casefold():
             reviewed.append(item)
             continue
         if field == 'identifiers' and not all(v['value'] in source for v in value):
@@ -260,7 +263,9 @@ def interpret(message, facts, turn_id, timestamp, zone, pending_question=None, r
         p = FactProvenance(field=field, origin='user_verification' if confirmed else 'ai_extraction',
             verified=confirmed, source_turn=turn_id,
             source_text=source, source_start=start, source_end=start + len(source), confidence=candidate.confidence)
-        proposed['provenance'] = [p for p in data['provenance'] if p['field'] != field] + [p.model_dump(mode='json')]
+        kept = [p for p in data['provenance'] if p['field'] != field or field == 'identifiers']
+        additions = [p.model_copy(update={'identifier_value':i['value']}).model_dump(mode='json') for i in item['value']] if field == 'identifiers' else [p.model_dump(mode='json')]
+        proposed['provenance'] = kept + additions
         try:
             validated = FACTS_ADAPTER.validate_python(proposed)
         except (ValidationError, ValueError):
@@ -270,9 +275,24 @@ def interpret(message, facts, turn_id, timestamp, zone, pending_question=None, r
         updates.append({'field': field, 'before': before, 'after': data[field], 'correction': correction})
         item['status'] = 'accepted'
         reviewed.append(item)
+    natural_review = None
+    if parsed.evidence_review and review_context and parsed.evidence_review.source_text in message and not set(parsed.intents) & {'unrelated', 'feedback', 'pause', 'skip', 'not_sure'}:
+        proposal = parsed.evidence_review
+        allowed = {c['id'] for c in review_context['candidates'] if not c['reviewed']}
+        reference = proposal.reference_text or proposal.source_text
+        document_ref = bool(reference and (re.search(r'attachment|screenshot|receipt|document|file',reference,re.I) or
+            review_context.get('focus_selected') and re.search(r'details',reference,re.I)))
+        all_named = document_ref and re.search(r'\ball\b',proposal.source_text,re.I) and not re.search(r'\b(?:not|wrong|incorrect|except)\b',proposal.source_text,re.I)
+        selected={d.candidate_id for d in proposal.decisions}
+        named = bool(reference and reference in message and (all_named or all(
+            c['value'].casefold() in reference.casefold() or c['field'].replace('_',' ').casefold() in reference.casefold() or document_ref and len(allowed)==1
+            for c in review_context['candidates'] if c['id'] in selected)))
+        focused = review_context.get('focus_selected') and len(allowed) == 1
+        if str(proposal.attempt_id) == review_context['id'] and all(d.candidate_id in allowed for d in proposal.decisions) and (named or focused):
+            natural_review = proposal.model_dump(mode='json', exclude={'source_text','reference_text'})
     return FACTS_ADAPTER.validate_python(data), updates, {'status': 'understood', 'language': parsed.language,
         'provider': settings.UNDERSTANDING_PROVIDER, 'model': settings.UNDERSTANDING_MODEL, 'category': None,
         'provider_initialized': True, 'invocation_succeeded': True, 'parsing_succeeded': True,
         'message': 'Working understanding from your words. You can review or correct it.',
         'candidates': reviewed, 'conflicts': conflicts, 'resolved_reviews': resolved_reviews,
-        'intents':parsed.intents, 'intent_source':parsed.intent_source}
+        'intents':parsed.intents, 'intent_source':parsed.intent_source, 'evidence_review':natural_review}
