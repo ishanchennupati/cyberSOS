@@ -121,7 +121,7 @@ def test_malformed_injected_output_falls_back(client, monkeypatch, output):
     assert state['turns'][-1]['fact_changes']['understanding']['status'] == 'fallback'
     assert state['facts']['amount'] is None
     assert state['plan']['plan']['actions'] == []
-    assert state['pending_question']['field'] == 'money_lost'
+    assert state['pending_question']['field'] is None  # Unknown incident: open context, never financial intake.
 
 
 def test_unsourced_and_invented_values_rejected(client, monkeypatch):
@@ -142,9 +142,10 @@ def test_provider_failure_is_honest_and_structured_fallback_usable(client, monke
     payload = dict(turn_id=str(uuid.uuid4()), expected_revision=0, type='message', text='Something happened.')
     state = client.post(path + '/turns', json=payload).json()
     assert state['turns'][-1]['fact_changes']['understanding']['status'] == 'fallback'
-    assert state['pending_question']['field'] == 'money_lost'
+    assert state['pending_question']['field'] is None
     state = client.post(path + '/turns', json=dict(turn_id=str(uuid.uuid4()), expected_revision=1,
-        type='answer', field='money_lost', value=True)).json()
+        type='message', text='I do not know yet.')).json()
+    assert state['facts']['money_lost'] is None
     assert 'call_1930' not in [a['id'] for a in state['plan']['plan']['actions']]  # Loss alone is not financial cyber fraud.
 
 
@@ -339,7 +340,11 @@ def test_generic_incident_metadata_and_summary_are_not_financial(client, monkeyp
     path, _, _ = story(client, monkeypatch, 'No money lost', [candidate('money_lost', False, 'No money lost')])
     base = path.removesuffix('/conversation')
     assert client.get(base).json()['incident_type'] == 'other'
-    assert 'financial fraud' not in client.post(base + '/generate-summary').json()['draft'].lower()
+    summary=client.post(base + '/generate-summary')
+    assert summary.status_code==409  # Conversation cases use the reviewed packet.
+    preview=client.get(base+'/reporting').json()
+    assert preview['state']=='gathering'
+    assert 'Financial Fraud' not in preview['mapping']['suggested_routes']
 
 
 def test_rich_fact_conflict_gets_one_focused_clarification(client, monkeypatch):
@@ -352,7 +357,9 @@ def test_rich_fact_conflict_gets_one_focused_clarification(client, monkeypatch):
     c['correction_source'] = 'Correction'
     _, state, _ = story(client, monkeypatch, 'Correction: Paytm', [c], state=state, path=path)
     assert state['facts']['payment_app'] == 'Paytm'
-    assert state['pending_question']['field'] is None  # App name alone does not prove a payment rail.
+    # App name alone does not prove a rail or require restarting open-story intake.
+    assert state['facts']['payment_method'] == 'unknown'
+    assert state['pending_question'] is None or state['pending_question']['field'] is None
 
 
 @pytest.mark.parametrize('text', ['My OTP is 123456', 'I shared OTP 123456', 'My PIN was 1234',

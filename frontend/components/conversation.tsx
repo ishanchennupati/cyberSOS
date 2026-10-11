@@ -8,10 +8,19 @@ import { ConversationActionPanel, isImmediateAction } from '@/components/convers
 import { ChatComposer, chatControl } from '@/components/chat/composer';
 import { EvidenceReview } from '@/components/chat/evidence-review';
 import { Brand } from '@/components/brand';
+import {ReportingPanel} from '@/components/chat/reporting-panel';
 
 type Staged = {id:string; name:string; file?:File; preview?:string; status:'uploading'|'ready'|'failed'; percent:number; error?:string};
 const draftKey = (id?:string) => `cybersos-chat-draft:${id ?? 'start'}`;
-const readable = (value:unknown):string => typeof value==='object'?JSON.stringify(value):String(value).replaceAll('_',' ');
+const readable = (value:unknown):string => {
+  if(Array.isArray(value))return value.map(readable).join(', ');
+  if(value&&typeof value==='object'){
+    if('original' in value&&typeof value.original==='string')return `${value.original} (approximate)`;
+    if('type' in value&&'value' in value)return `${readable(value.type)}: ${readable(value.value)}`;
+    return JSON.stringify(value);
+  }
+  return String(value).replaceAll('_',' ');
+};
 const routes = [{value:'women_children',label:'Women/Children Related Crime'}, {value:'financial',label:'Financial Fraud'}, {value:'other',label:'Other Cyber Crime'}, {value:'not_sure',label:'Not sure'}] as const;
 
 export function Conversation({incidentId}:{incidentId?:string}) {
@@ -24,7 +33,7 @@ export function Conversation({incidentId}:{incidentId?:string}) {
   const [error,setError]=useState('');
   const [failed,setFailed]=useState<TurnRequest|null>(null);
   const [stale,setStale]=useState(false);
-  const [artifact,setArtifact]=useState<'plan'|'case'|null>(null);
+  const [artifact,setArtifact]=useState<'plan'|'case'|'report'|null>(null);
   const [away,setAway]=useState(false);
   const [analyzing,setAnalyzing]=useState<Record<string,boolean>>({});
   const [analysisErrors,setAnalysisErrors]=useState<Record<string,string>>({});
@@ -34,6 +43,7 @@ export function Conversation({incidentId}:{incidentId?:string}) {
   const viewport=useRef<HTMLDivElement>(null), latest=useRef<HTMLDivElement>(null);
   const nearBottom=useRef(true), lock=useRef(false), initialized=useRef(false);
   const currentDraft=useRef(draft);currentDraft.current=draft;
+  const draftEditVersion=useRef(0),draftEditedAfterSend=useRef(false);
   const artifactTrigger=useRef<HTMLButtonElement|null>(null);
   const creation=useRef<{id:string;secret:string}>();
   const creating=useRef<Promise<string>>();
@@ -48,7 +58,7 @@ export function Conversation({incidentId}:{incidentId?:string}) {
     let active=true;
     try {
       const stored=sessionStorage.getItem(draftKey(incidentId));
-      if(stored){const saved=JSON.parse(stored);setDraft(saved.draft??'');setFailed(saved.failed??null);
+      if(stored){const saved=JSON.parse(stored);draftEditedAfterSend.current=!!saved.draftEditedAfterSend;setDraft(saved.draft||(saved.failed?.type==='message'&&!saved.draftEditedAfterSend?saved.failed.text??'':'')||'');setFailed(saved.failed??null);
         if(saved.failed)setError('Your reply was interrupted. Retry to check whether it arrived and continue.');
         if(saved.caseId&&!incidentId){setCreatedId(saved.caseId);getConversation(saved.caseId).then(next=>{if(active)setState(next);}).catch(e=>{if(active)setError(e.message);});}
         if(saved.files){setFiles(saved.files.map((item:Staged)=>({...item,status:'uploading',percent:0})));
@@ -65,7 +75,7 @@ export function Conversation({incidentId}:{incidentId?:string}) {
     const key=draftKey(incidentId??(redirected.current?id:undefined));
     try{if(redirected.current&&id)sessionStorage.removeItem(draftKey());
       if(!draft&&!failed&&!files.length)sessionStorage.removeItem(key);
-      else sessionStorage.setItem(key,JSON.stringify({draft,failed,caseId:id,files:files.map(({id,name,status})=>({id,name,status}))}));}catch{/* Keep draft in memory. */}
+      else sessionStorage.setItem(key,JSON.stringify({draft,failed,draftEditedAfterSend:draftEditedAfterSend.current,caseId:id,files:files.map(({id,name,status})=>({id,name,status}))}));}catch{/* Keep draft in memory. */}
   },[draft,failed,files,id,incidentId]);
   useEffect(()=>{if(nearBottom.current)latest.current?.scrollIntoView({block:'end'});},[state?.revision,files.length,busy]);
   useEffect(()=>{
@@ -138,9 +148,14 @@ export function Conversation({incidentId}:{incidentId?:string}) {
       ...(draft.trim()?{text:draft}:{}),attachment_ids:files.map(file=>file.id),timezone:Intl.DateTimeFormat().resolvedOptions().timeZone,
       ...(activeReview?{review_context_id:activeReview}:{})};
     setFailed(request);
+    const submittedEditVersion=draftEditVersion.current;
+    if(!payload)draftEditedAfterSend.current=false;
+    if(request.type==='message'&&currentDraft.current===(request.text??'')){
+      currentDraft.current='';setDraft('');
+    }
     try{const caseId=await ensureCase();const next=await sendConversationTurn(caseId,request);
       nearBottom.current=true;setState(next);setFailed(null);setStale(false);
-      const remainingDraft=request.type==='message'&&currentDraft.current===(request.text??'')?'':currentDraft.current;
+      const remainingDraft=currentDraft.current;
       const sentFiles=new Set(request.attachment_ids??[]);
       const remainingFiles=files.filter(file=>!sentFiles.has(file.id));
       if(request.type==='message'){setActiveReview(null);setDraft(remainingDraft);for(const file of files)if(sentFiles.has(file.id)&&file.preview)URL.revokeObjectURL(file.preview);setFiles(remainingFiles);}
@@ -152,7 +167,10 @@ export function Conversation({incidentId}:{incidentId?:string}) {
         // hold the message pipeline or silently promote document candidates.
         void(async()=>{for(const fileId of request.attachment_ids!)await analyzeFile(caseId,fileId,next.revision);})();
       }
-    }catch(e){setError(e instanceof Error?e.message:'Message could not be saved.');if(e instanceof ApiError&&e.status===409){setStale(true);if(id)try{setState(await getConversation(id));}catch{/* Reload available. */}}}
+    }catch(e){
+      if(request.type==='message'&&!currentDraft.current&&request.text&&draftEditVersion.current===submittedEditVersion&&!draftEditedAfterSend.current){currentDraft.current=request.text;setDraft(request.text);}
+      setError(e instanceof Error?e.message:'Message could not be saved.');if(e instanceof ApiError&&e.status===409){setStale(true);if(id)try{setState(await getConversation(id));}catch{/* Reload available. */}}
+    }
     finally{lock.current=false;setBusy(false);}
   }
   const completed=new Map(state?.completions.map(item=>[item.action_id,item.completed]));
@@ -161,12 +179,14 @@ export function Conversation({incidentId}:{incidentId?:string}) {
   const complete=(actionId:string,done:boolean)=>void send({turn_id:crypto.randomUUID(),expected_revision:state!.revision,type:'completion',action_id:actionId,value:done});
   const review=(evidence_review:NonNullable<TurnRequest['evidence_review']>)=>void send({turn_id:crypto.randomUUID(),expected_revision:state!.revision,type:'evidence_review',evidence_review});
   const pending=busy&&failed&&!state?.turns.some(turn=>turn.id===failed.turn_id)?failed:null;
-  function feedback(text:string){setDraft(text);document.getElementById('chat-message')?.focus();}
+  const latestHelpId=state?.turns.slice().reverse().find(turn=>!!turn.fact_changes.help_view)?.id;
+  function changeDraft(text:string){draftEditVersion.current++;if(failed?.type==='message')draftEditedAfterSend.current=true;currentDraft.current=text;setDraft(text);}
+  function feedback(text:string){changeDraft(text);document.getElementById('chat-message')?.focus();}
   return <main className="flex h-[100dvh] min-h-0 flex-col bg-paper text-ink">
     <header className="shrink-0 border-b border-line px-4 py-3"><div className="mx-auto flex max-w-6xl items-center justify-between gap-2">
       <Brand /><div className="flex gap-1">
       {!!state?.plan.plan.actions.length&&<button className={chatControl} aria-expanded={artifact==='plan'} onClick={event=>{artifactTrigger.current=event.currentTarget;setArtifact(artifact==='plan'?null:'plan');}}>Response plan</button>}
-      {!!state?.turns.length&&<button className={chatControl} aria-expanded={artifact==='case'} onClick={event=>{artifactTrigger.current=event.currentTarget;setArtifact(artifact==='case'?null:'case');}}>View case</button>}</div></div></header>
+      {!!state?.turns.length&&<button className={chatControl} aria-expanded={artifact==='case'} onClick={event=>{artifactTrigger.current=event.currentTarget;setArtifact(artifact==='case'?null:'case');}}>View case</button>}{state?.understanding_review?.available&&<button className={chatControl} aria-expanded={artifact==='report'} onClick={event=>{artifactTrigger.current=event.currentTarget;setArtifact(artifact==='report'?null:'report');}}>Prepare report</button>}</div></div></header>
     <div className="mx-auto flex min-h-0 w-full max-w-6xl flex-1 flex-col md:flex-row"><section aria-label="Incident conversation" className="flex min-h-0 min-w-0 flex-1 flex-col">
       <div ref={viewport} className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4" onScroll={()=>{const el=viewport.current;if(el){nearBottom.current=el.scrollHeight-el.scrollTop-el.clientHeight<140;setAway(!nearBottom.current);}}}>
         {!state?.turns.length&&!pending&&<div className="mx-auto flex min-h-[45dvh] max-w-2xl flex-col items-center justify-center text-center">
@@ -192,13 +212,24 @@ export function Conversation({incidentId}:{incidentId?:string}) {
             </div>)}</div>
           <div className="mr-4 leading-relaxed"><p className="mb-2 text-sm font-semibold">CyberSOS</p>{turn.fact_changes.acknowledgement&&<p className="whitespace-pre-wrap break-words">{turn.fact_changes.acknowledgement}</p>}
             <p className="whitespace-pre-wrap break-words">{turn.fact_changes.next_move?.message??turn.pending_question?.question}</p>
+            {turn.id===state?.turns.at(-1)?.id&&state.memory.incident_scope_pending===true&&<a href="/incident/start" className={`${chatControl} mt-2 border border-line2`}>Start a separate case</a>}
+            {turn.fact_changes.help_view&&turn.id!==latestHelpId&&<p className="mt-2 text-xs text-ink-muted">Help was requested at revision {turn.revision}. The latest help below follows your current case.</p>}
+            {turn.id===latestHelpId&&state.projection.current_help&&<details className="mt-3 rounded-xl border border-line p-3" open><summary className="min-h-11 cursor-pointer py-2">Current understanding and help</summary>
+              <p className="text-xs text-ink-muted">{state.projection.current_help.meaning}</p>
+              <p className="mt-2 text-xs text-ink-muted">Current understanding at revision {state.revision}. New messages and corrections update this help.</p>
+              <dl className="my-3 space-y-2">{Object.entries(state.projection.current_help.known_facts).map(([field,fact])=><div key={field}><dt className="text-xs text-ink-muted">{field.replaceAll('_',' ')}</dt><dd className="break-words text-sm">{readable(fact.value)}</dd></div>)}</dl>
+              {state.projection.current_help.unknowns.length>0&&<p className="mb-3 text-sm">Still unknown or unresolved: {state.projection.current_help.unknowns.map(readable).join(', ')}. You can leave these unknown or correct them in chat.</p>}
+              <p className="mb-3 text-xs text-ink-muted">These steps follow your current case facts. Completion is recorded by you.</p>
+              <ConversationActionPanel actions={state.plan.plan.actions.filter(action=>!isImmediateAction(action))} completed={completed} disabled={busy||!!failed} onComplete={complete}/>
+              {state.plan.plan.actions.length===0&&<p className="text-sm">No specific actions are justified by the known facts yet. You can add information whenever you are ready.</p>}
+            </details>}
             {turn.fact_changes.knowledge_sources?.map(source=><a key={source.id} href={source.url} target="_blank" rel="noopener noreferrer" className="mt-2 inline-block min-h-11 py-2 text-sm underline">{source.title} · reviewed {source.reviewed_on}</a>)}
           </div></li>)}</ol>
         {pending&&<div className="mx-auto max-w-2xl space-y-4 pb-6" aria-label="Pending message"><div className="ml-10 rounded-2xl bg-surface p-4"><p className="whitespace-pre-wrap break-words">{pending.text??(pending.type==='evidence_review'?'Reviewed attachment details':pending.type==='case_review'?'Show my response plan':pending.type==='route_hint'?routes.find(r=>r.value===pending.route_hint)?.label:'Updating your case…')}</p>
           {pending.attachment_ids?.map(fileId=><p key={fileId} className="mt-2 text-sm">{files.find(file=>file.id===fileId)?.name??'Attached file'}</p>)}</div><p role="status" aria-live="polite" className="text-sm text-ink-muted">CyberSOS is considering your reply…</p></div>}
         {!!state?.next_move?.quick_replies.length&&<div className="mx-auto flex max-w-2xl flex-wrap gap-2 pb-4">{state.next_move.quick_replies.map(reply=><button key={reply} disabled={busy||!!failed} className={`${chatControl} border border-line2`} onClick={()=>void send({turn_id:crypto.randomUUID(),expected_revision:state.revision,type:'message',text:reply})}>{reply}</button>)}</div>}
         {immediate.length>0&&<div className="mx-auto max-w-2xl pb-5"><ConversationActionPanel actions={immediate} completed={completed} disabled={busy||!!failed} onComplete={complete}/></div>}
-        {state?.understanding_review?.available&&!state.understanding_review.has_reviewed&&<details className="mx-auto mb-4 max-w-2xl rounded-xl border border-line p-3"><summary className="min-h-11 cursor-pointer py-2">Review what I understood</summary><dl className="space-y-2">{Object.entries(state.understanding_review.summary).map(([field,fact])=><div key={field}><dt className="text-xs text-ink-muted">{field.replaceAll('_',' ')}</dt><dd className="break-words text-sm">{readable(fact.value)}</dd></div>)}</dl><p className="mt-3 text-sm">Correct anything in chat, or confirm this understanding to see your fuller plan.</p><button disabled={busy||!!failed} className={`${chatControl} mt-2 border border-line2`} onClick={()=>void send({turn_id:crypto.randomUUID(),expected_revision:state.revision,type:'case_review'})}>Looks right · show my plan</button></details>}
+        {state?.understanding_review?.available&&!state.understanding_review.reviewed&&<details open={!busy&&state.turns.some(turn=>turn.fact_changes.review_prompt===true)&&!state.pending_question&&!state.next_move?.message.includes('?')} className="mx-auto mb-4 max-w-2xl rounded-xl border border-line p-3"><summary className="min-h-11 cursor-pointer py-2">Review what I understood</summary><dl className="space-y-2">{Object.entries(state.understanding_review.summary).map(([field,fact])=><div key={field}><dt className="text-xs text-ink-muted">{field.replaceAll('_',' ')}</dt><dd className="break-words text-sm">{readable(fact.value)}</dd></div>)}</dl><p className="mt-3 text-sm">Correct anything in chat, or confirm this understanding to see your fuller plan.</p><button disabled={busy||!!failed} className={`${chatControl} mt-2 border border-line2`} onClick={()=>void send({turn_id:crypto.randomUUID(),expected_revision:state.revision,type:'case_review'})}>Looks right · show my plan</button></details>}
         <div ref={latest}/>
       </div>
       <div className="shrink-0 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2 sm:px-5"><div className="mx-auto max-w-2xl">
@@ -206,7 +237,7 @@ export function Conversation({incidentId}:{incidentId?:string}) {
         {error&&<div role="alert" className="mb-2 rounded-xl border border-line2 p-3 text-sm"><p>{error}</p>{failed&&!stale&&<button className={`${chatControl} underline`} disabled={busy} onClick={()=>void send(failed)}>Retry message</button>}
           {failed&&<button className={`${chatControl} underline`} disabled={busy} onClick={()=>{setFailed(null);setError('');setStale(false);}}>Review draft</button>}
           {id&&<button className={`${chatControl} underline`} disabled={busy} onClick={async()=>{try{setState(await getConversation(id));setError('');}catch(e){setError(e instanceof Error?e.message:'Reload failed.');}}}>Reload conversation</button>}</div>}
-        <ChatComposer draft={draft} onDraft={setDraft} onSend={()=>void send()} onFiles={selectFiles} busy={busy} canSend={!!canSend}>
+        <ChatComposer draft={draft} onDraft={changeDraft} onSend={()=>void send()} onFiles={selectFiles} busy={busy} canSend={!!canSend}>
           {activeReview&&<div role="status" className="px-3 py-2 text-sm">Reviewing the selected attachment in chat. Name the details to confirm or correct.<button type="button" className={`${chatControl} underline`} onClick={()=>setActiveReview(null)}>Cancel review focus</button></div>}
           {files.length>0&&<ul aria-label="Pending attachments" className="flex max-h-[15dvh] flex-wrap gap-2 overflow-y-auto px-2 pt-2">{files.map(file=><li key={file.id} className="max-w-full rounded-xl border border-line p-2 text-sm">
             {file.preview&&<Image unoptimized width={80} height={64} src={file.preview} alt={`Preview ${file.name}`} className="h-16 w-20 rounded object-contain"/>}<p className="max-w-52 truncate">{file.name}</p>
@@ -217,9 +248,9 @@ export function Conversation({incidentId}:{incidentId?:string}) {
         <div className="mt-2 flex flex-wrap justify-between gap-1 text-xs text-ink-muted"><span>Synthetic only · No OTPs, PINs, passwords or sensitive images. JPG, PNG, PDF · 10 MB.</span><span role="status" aria-live="polite">{files.some(file=>file.status==='uploading')?'Uploading…':state?.turns.length?'Private case':''}</span></div>
         {!!state?.turns.length&&<div className="flex gap-3"><button className="min-h-9 text-xs text-ink-muted underline" onClick={()=>feedback('I think you misunderstood what I said.')}>Misunderstood</button><button className="min-h-9 text-xs text-ink-muted underline" onClick={()=>feedback('You are asking something I already answered.')}>Repeating a question</button></div>}
       </div></div></section>
-      {artifact&&state&&<aside aria-label={artifact==='plan'?'Response plan details':'Current case details'} className="order-first max-h-[25dvh] shrink-0 overflow-y-auto rounded-2xl border border-line2 bg-paper p-4 shadow-card md:order-last md:max-h-none md:w-96 md:rounded-none md:border-y-0 md:border-r-0">
-        <div className="mb-3 flex items-center justify-between"><h2 className="font-semibold">{artifact==='plan'?'Current response plan':'Your current case'}</h2><button className={chatControl} onClick={()=>{setArtifact(null);artifactTrigger.current?.focus();}}>Close details</button></div>
-        {artifact==='plan'?(state.understanding_review&&!state.understanding_review.has_reviewed?<><p className="text-sm">Review the current understanding before opening your fuller plan. Urgent applicable help remains in the conversation.</p><dl className="mt-3 space-y-2">{Object.entries(state.understanding_review.summary).map(([field,fact])=><div key={field}><dt className="text-xs text-ink-muted">{field.replaceAll('_',' ')}</dt><dd className="break-words text-sm">{readable(fact.value)}</dd></div>)}</dl><p className="mt-3 text-sm">Correct anything in chat.</p>{state.understanding_review.available&&<button disabled={busy||!!failed} className={`${chatControl} mt-3 border border-line2`} onClick={()=>void send({turn_id:crypto.randomUUID(),expected_revision:state.revision,type:'case_review'})}>Looks right · show my plan</button>}</>:<>{state.understanding_review&&!state.understanding_review.reviewed&&<p role="status" className="mb-3 text-sm">Your case changed since review. This plan follows your current facts; you can correct them in chat.</p>}<ConversationActionPanel actions={state.plan.plan.actions.filter(action=>!isImmediateAction(action))} completed={completed} disabled={busy||!!failed} onComplete={complete}/></>):<>
+      {artifact&&state&&<aside aria-label={artifact==='report'?'Reporting packet':artifact==='plan'?'Response plan details':'Current case details'} className="order-first max-h-[25dvh] shrink-0 overflow-y-auto rounded-2xl border border-line2 bg-paper p-4 shadow-card md:order-last md:max-h-none md:w-96 md:rounded-none md:border-y-0 md:border-r-0">
+        <div className="mb-3 flex items-center justify-between"><h2 className="font-semibold">{artifact==='report'?'Your reporting packet':artifact==='plan'?'Current response plan':'Your current case'}</h2><button className={chatControl} onClick={()=>{setArtifact(null);artifactTrigger.current?.focus();}}>Close details</button></div>
+        {artifact==='report'?<ReportingPanel caseState={state} onCaseChange={next=>setState(previous=>previous&&previous.revision>next.revision?previous:next)}/>:artifact==='plan'?(state.understanding_review&&!state.understanding_review.has_reviewed?<><p className="text-sm">Review the current understanding before opening your fuller plan. Urgent applicable help remains in the conversation.</p><dl className="mt-3 space-y-2">{Object.entries(state.understanding_review.summary).map(([field,fact])=><div key={field}><dt className="text-xs text-ink-muted">{field.replaceAll('_',' ')}</dt><dd className="break-words text-sm">{readable(fact.value)}</dd></div>)}</dl><p className="mt-3 text-sm">Correct anything in chat.</p>{state.understanding_review.available&&<button disabled={busy||!!failed} className={`${chatControl} mt-3 border border-line2`} onClick={()=>void send({turn_id:crypto.randomUUID(),expected_revision:state.revision,type:'case_review'})}>Looks right · show my plan</button>}</>:<>{state.understanding_review&&!state.understanding_review.reviewed&&<p role="status" className="mb-3 text-sm">Your case changed since review. This plan follows your current facts; you can correct them in chat.</p>}<ConversationActionPanel actions={state.plan.plan.actions.filter(action=>!isImmediateAction(action))} completed={completed} disabled={busy||!!failed} onComplete={complete}/></>):<>
           <p className="break-all text-sm">CyberSOS reference: {state.projection.reference}</p><p className="mt-2 text-sm">{state.projection.status} · revision {state.projection.revision}</p>
           {state.projection.working_understanding.length>0&&<p className="mt-4 text-sm">Working understanding: {state.projection.working_understanding.map(readable).join(', ')}</p>}
           <dl className="mt-4 space-y-3">{Object.entries(state.projection.known_facts).filter(([field])=>field!=='signals').map(([field,fact])=><div key={field}><dt className="text-sm font-medium">{field.replaceAll('_',' ')}</dt><dd className="break-words text-sm">{readable(fact.value)}<span className="block text-xs text-ink-muted">{fact.evidence_id?`Reviewed attachment detail${fact.source_deleted?' · original deleted':''}`:fact.verified?'Reviewed with you':'Working information · correct it in chat'}</span></dd></div>)}</dl>

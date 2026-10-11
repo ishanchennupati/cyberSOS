@@ -100,6 +100,8 @@ def interpret(message, facts, turn_id, timestamp, zone, pending_question=None, r
             'case_recall': recalled,
             'timestamp': timestamp.isoformat(), 'timezone': zone}
         context_data['evidence_review'] = review_context
+        from app.services.case_memory import derive_memory
+        context_data['incident_scope_pending'] = derive_memory(facts, recent_turns, [])['incident_scope_pending']
         context = json.dumps(context_data,ensure_ascii=False)
         for group in ['older','recent']:
             while len(context)>MAX_CONTEXT_CHARS and recalled[group]:
@@ -112,10 +114,13 @@ def interpret(message, facts, turn_id, timestamp, zone, pending_question=None, r
         if len(output) > settings.UNDERSTANDING_MAX_OUTPUT_CHARS:
             return facts, [], dict(fallback, reason='output_limit', category='MALFORMED_OUTPUT')
         parsed = Understanding.model_validate_json(output)
+        fallback['parsing_succeeded'] = True
         if parsed.intents and (not parsed.intent_source or parsed.intent_source not in message):
-            raise ValueError('Intent must quote the current message')
-        if set(parsed.intents) & {'unrelated','feedback'}:
-            parsed = parsed.model_copy(update={'candidates':[]})
+            from app.services.case_agent import MoveRejected
+            raise MoveRejected('INTENT_SOURCE_MISMATCH')
+        if set(parsed.intents) & {'unrelated','feedback','witness','separate_incident'} or (
+                context_data['incident_scope_pending'] and 'same_incident' not in parsed.intents):
+            parsed = parsed.model_copy(update={'candidates':[], 'evidence_review':None})
         check_values(parsed.model_dump(mode='json'))
     except Exception as exc:
         # Provider errors may include user input/key; never log or expose them.
@@ -123,7 +128,9 @@ def interpret(message, facts, turn_id, timestamp, zone, pending_question=None, r
         # Pydantic locations/types help diagnose malformed structured responses;
         # never include its input, error message or raw provider response.
         errors = [{'loc': list(e['loc']), 'type': e['type']} for e in exc.errors()[:8]] if isinstance(exc, ValidationError) else []
+        from app.services.case_agent import MoveRejected
         return facts, [], dict(fallback, reason=failure_reason(exc), category=failure_category(exc), validation_errors=errors, error_type=type(exc).__name__,
+            rejection_reason=str(exc) if isinstance(exc, MoveRejected) else None,
             http_status=getattr(exc, 'code', None) if isinstance(getattr(exc, 'code', None), int) else None)
     data = facts.model_dump(mode='json')
     if parsed.language != 'unknown':
@@ -163,6 +170,20 @@ def interpret(message, facts, turn_id, timestamp, zone, pending_question=None, r
             reviewed.append(item)
             continue
         source = candidate.source_text
+        confirmed_blackmail = bool(pending_question and (pending_question.get('related_field') or pending_question.get('field')) == 'blackmail' and source.strip().casefold() == 'yes')
+        if field == 'blackmail' and value is True and parsed.language == 'en' and not confirmed_blackmail and not re.search(
+                r'\b(?:blackmail\w*|demand\w*|unless|pay)\b|\bif\b.{0,100}\b(?:do not|don.t|did not|refuse)\b|'
+                r'\b(?:ask\w*|told|want\w*)\b.{0,100}\b(?:do|send|give|meet)\b', source, re.I):
+            item['status'] = 'needs_review'
+            item['uncertainty'] = 'A coercive demand or condition is not established by this threat.'
+            reviewed.append(item)
+            continue
+        from app.schemas.understanding import BOOLEAN_CANDIDATE_FIELDS
+        short_answer = source.strip().casefold() in {'yes','no','avunu','kaadu','kadu','haan','nahi','nahin','అవును','కాదు','हाँ','नहीं'}
+        if field in BOOLEAN_CANDIDATE_FIELDS and short_answer and (
+                not pending_question or (pending_question.get('related_field') or pending_question.get('field')) != field):
+            reviewed.append(item)
+            continue
         confirmed = False
         if candidate.confirms_pending is not None:
             if not verification_candidate or value != verification_candidate['value']:

@@ -28,6 +28,9 @@ def question(facts, answered, conflicts=()):
         return FactRequirement(field=None, priority=FactPriority.supporting,
             question='Your statements differ about ' + conflicts[0].replace('_', ' ') +
                 '. Please clarify in your own words, starting with “Correction:”.').model_dump(mode='json')
+    if facts.kind == 'incident_understanding' and not facts.signals and facts.money_lost is not True:
+        return FactRequirement(field=None, priority=FactPriority.supporting,
+            question='What happened online that you would like help with?').model_dump(mode='json')
     if facts.money_lost is True and not facts.signals and facts.payment_method.value == 'unknown':
         return FactRequirement(field=None, priority=FactPriority.supporting,
             question='What happened to the money—was it an online payment, an unexplained account debit, or something else?').model_dump(mode='json')
@@ -44,8 +47,9 @@ def question(facts, answered, conflicts=()):
         if 'account_takeover' in facts.signals:
             relevant.add('account_compromised')
         priorities = [r for r in FIELDS if r.field.value in relevant]
-        priorities.append(FactRequirement(field=FactField.money_lost, priority=FactPriority.critical,
-            question='Has any money left your account or been sent because of this incident?'))
+        if 'financial' in facts.signals:
+            priorities.append(FactRequirement(field=FactField.money_lost, priority=FactPriority.critical,
+                question='Has any money left your account or been sent because of this incident?'))
         priorities += [r for r in FIELDS if r.field.value == 'evidence_available']
     else:
         priorities = FIELDS
@@ -109,6 +113,9 @@ def read(db, incident):
         'known_facts': memory['facts'], 'evidence_count': len(evidence),
         'completed_actions': sum(item.completed for item in completions),
         'completion_meaning': 'Recorded by you'}
+    if any(turn.fact_changes.get('help_view') for turn in turns):
+        from app.services.conversation_control import help_view
+        projection['current_help'] = help_view(facts, current_policy, memory['open_issues'])
     from app.services.evidence_intelligence import pending_reviews
     hint = next((t.fact_changes['route_hint'] for t in reversed(turns) if 'route_hint' in t.fact_changes), None)
     reviewed = next((t for t in reversed(turns) if t.type == 'case_review'), None)
@@ -167,6 +174,8 @@ def submit(db, incident, payload):
         if not snapshot.understanding_review.get('available'):
             raise HTTPException(409, 'Tell us a little more before reviewing the understanding.')
         changes = {'reviewed_facts': facts.model_dump(mode='json', exclude={'provenance', 'detected_language'})}
+        changes['conversation_control'] = {'request':'plan', 'questions_paused':True,
+            'incident_scope_pending':snapshot.memory.get('incident_scope_pending', False)}
         text = 'I reviewed the current understanding. Show my response plan.'
     elif payload.type == 'message':
         text = payload.text or ''
@@ -184,6 +193,8 @@ def submit(db, incident, payload):
                 snapshot.pending_question.model_dump(mode='json') if snapshot.pending_question else None),
             recent_turns=snapshot.turns, review_context=active_review) if text.strip() else (facts, [], {'status':'understood', 'candidates':[], 'conflicts':[], 'attachment_only':True})
         log_ai_stage('extraction', result, (perf_counter() - stage_started) * 1000)
+        from app.services.conversation_control import explicit_controls
+        result['intents'] = sorted(set(result.get('intents', [])) | explicit_controls(text))
         resolved = {u['field'] for u in updates}
         conflicts = list(dict.fromkeys([f for f in conflicts if f not in resolved] + result['conflicts']))
         changes = {'updates': updates, 'understanding': result}
@@ -290,16 +301,59 @@ def submit(db, incident, payload):
             'analysis': row.extraction_status.value}
             for row in db.scalars(select(Evidence).where(Evidence.incident_id == incident.id).limit(20))]
         result = changes.get('understanding', {})
+        from app.services.conversation_control import control, dispositions, suppressed_fields, question_context, help_view
+        current_control = control(result.get('intents', []), snapshot.memory)
+        changes['conversation_control'] = current_control
+        previous_field = snapshot.next_move.related_field if snapshot.next_move and snapshot.next_move.type in {
+            'ASK_CLARIFICATION','VERIFY_INFORMATION','RESOLVE_CONFLICT','REQUEST_EVIDENCE','CONTINUE_OPEN_CONVERSATION'} else (
+            (snapshot.pending_question.field.value if snapshot.pending_question.field else 'story') if snapshot.pending_question else None)
+        if snapshot.next_move and snapshot.next_move.type == 'REQUEST_EVIDENCE': previous_field = 'evidence_available'
+        if snapshot.next_move and snapshot.next_move.type == 'ANSWER_RELEVANT_QUESTION' and '?' in snapshot.next_move.message:
+            previous_field = snapshot.next_move.related_field
+        if previous_field and payload.type == 'message':
+            prior = dispositions(facts, snapshot.turns).get(previous_field, {})
+            answered_field = previous_field in {u['field'] for u in changes.get('updates', [])}
+            disposition = 'answered' if answered_field else ('declined' if set(result.get('intents', [])) & {'skip','not_sure'} else 'nonanswer')
+            relevant_context = question_context(facts, previous_field)
+            changes['question_disposition'] = {'field':previous_field, 'status':disposition,
+                'count':(prior.get('count', 0) if prior.get('context') == relevant_context else 0) + 1,
+                'context':relevant_context}
+            # A natural combined request can mention identifiers while targeting
+            # message text. An explicit skip/not-sure covers that request too;
+            # this records control only, never an identifier fact.
+            if disposition == 'declined' and previous_field in {'message_text','threat_text'} and snapshot.next_move:
+                import re
+                inquiry = re.split(r'(?<=[.!])\s+', snapshot.next_move.message)[-1]
+                if re.search(r'\b(?:identifiers?|identifying details|usernames?|handles?|profiles?)\b', inquiry, re.I):
+                    changes['question_disposition']['also_declined'] = [{'field':'identifiers','status':'declined',
+                        'count':1,'context':question_context(facts,'identifiers')}]
         declined = case_agent.declined_fields(snapshot.turns) - {u['field'] for u in changes.get('updates', [])}
+        previous_dispositions = dispositions(facts, snapshot.turns)
+        changed_purpose = {field for field,item in previous_dispositions.items()
+            if item.get('context') != question_context(facts, field)}
+        declined.difference_update(changed_purpose)
+        answered = [field for field in answered if field.value not in changed_purpose]
         if changes.get('answered_unknown'):
             declined.add(changes['answered_unknown'])
         if declined & {'occurred_at','time_window'}: declined.update({'occurred_at','time_window'})
+        question_history = dispositions(facts, snapshot.turns)
+        if changes.get('question_disposition'):
+            item=changes['question_disposition']
+            for entry in [item,*item.get('also_declined',[])]:
+                question_history[entry['field']] = entry
+        declined.update(suppressed_fields(facts, question_history))
         decision_answered = list(dict.fromkeys([f.value for f in answered] + sorted(declined)))
         unresolved = case_agent.unresolved_candidates(snapshot.turns, result, changes.get('updates', []), decision_answered)
         if changes.get('field'):
             unresolved = [c for c in unresolved if c['field'] != changes['field']]
         changes['unresolved_candidates'] = unresolved
-        if result.get('status') == 'fallback':
+        if current_control['request'] in {'help','plan','summary','conclude','pause','witness','separate_incident'}:
+            # Citizen control and exact approved help need no additional model
+            # proposal. Understanding still owns multilingual intent and facts.
+            move, agent = None, {'status':'not_requested', 'reason':'citizen_control',
+                'category':None, 'skipped':True}
+            stage_duration_ms = 0
+        elif result.get('status') == 'fallback':
             move, agent = None, {'status': 'fallback', 'reason': 'understanding_unavailable',
                 'category': result.get('category', 'PROVIDER_UNAVAILABLE'), 'skipped': True}
             stage_duration_ms = 0
@@ -309,9 +363,14 @@ def submit(db, incident, payload):
                 evidence, decision_answered,
                 snapshot.next_move.model_dump(mode='json') if snapshot.next_move else None)
             context['user_intents'] = result.get('intents', [])
+            context['facts_changed'] = bool(changes.get('updates', []))
+            context['case_state']['review_offered'] = bool(snapshot.turns and snapshot.turns[-1].fact_changes.get('review_prompt'))
             context['route_hint'] = snapshot.route_hint
-            if 'pause' in context['user_intents']: context['memory']['questions_paused'] = True
-            if 'resume' in context['user_intents']: context['memory']['questions_paused'] = False
+            context['memory']['questions_paused'] = current_control['questions_paused']
+            # Preserve equivalent-topic suppression assembled by the agent
+            # context (e.g. exact, approximate and textual incident timing).
+            context['answered_fields'] = sorted(set(context['answered_fields']) | set(decision_answered))
+            context['unknown_fields'] = [f for f in context['unknown_fields'] if f not in context['answered_fields']]
             stage_started = perf_counter()
             move, agent = case_agent.decide(context)
             if move:
@@ -322,25 +381,49 @@ def submit(db, incident, payload):
         from app.domain.facts import FactField
         fallback_answered = [FactField(field) for field in decision_answered if field in {item.value for item in FactField}]
         from app.services.case_memory import derive_memory
-        paused = derive_memory(facts, snapshot.turns, conflicts)['questions_paused']
-        if 'pause' in result.get('intents', []): paused = True
-        if 'resume' in result.get('intents', []): paused = False
-        pending = None if move or paused else question(facts, fallback_answered, conflicts)
+        paused = current_control['questions_paused']
+        request = current_control['request']
+        pending = None if move or paused or request != 'investigate' else question(facts, fallback_answered, conflicts)
+        if pending and pending['field'] is None and 'story' in decision_answered and not conflicts:
+            pending = None
         changes['next_move'] = move.model_dump(mode='json') if move else None
         changes['agent'] = agent
         acknowledgement = '' if move and (move.fact_refs or move.type in {'ACKNOWLEDGE_AND_WAIT','ANSWER_RELEVANT_QUESTION','EXPLAIN_APPROVED_ACTION'}) else case_agent.acknowledge(facts, changes.get('updates', []))
         if move and move.type == 'ACKNOWLEDGE_AND_WAIT' and move.message == acknowledgement:
             acknowledgement = ''  # The same grounded acknowledgement is rendered once.
         if result.get('status') == 'fallback':
-            acknowledgement = "Your message is saved. AI understanding is temporarily unavailable. I'll guide you with a focused question instead."
+            acknowledgement = 'Your message is saved. AI understanding is temporarily unavailable; no new facts were inferred.'
         elif move is None and not paused:
             acknowledgement += " Automatic follow-up is temporarily unavailable. We can continue with a focused question."
         elif move is None:
             acknowledgement = 'Your message is saved. Questions remain paused. You can ask to continue whenever you are ready.'
+        if agent.get('rejection_reason') == 'REPEATED_CASE_RECAP' and facts.signals and not conflicts and not paused:
+            pending = None
+            acknowledgement = 'Your case details are saved. Review what I understood below; you can confirm it to see your response plan, or correct anything in chat.'
+            changes['review_prompt'] = True
+        elif move and move.type == 'ACKNOWLEDGE_AND_WAIT' and facts.signals and not conflicts and not paused:
+            changes['review_prompt'] = True
+        if request in {'help','plan','summary','conclude'}:
+            changes['help_view'] = help_view(facts, plan, conflicts)
+            pending = None
+            acknowledgement = 'Here is the current understanding and applicable help. Unknown details remain unknown. Routine questions are paused; you can correct or add information whenever you want.'
+            if not move or '?' in move.message:
+                changes['next_move'] = None
+        elif request in {'witness','separate_incident'}:
+            changes['next_move'] = None
+            pending = None
+            acknowledgement = 'I have kept this separate from the existing case. Is this a separate incident affecting someone else, happening physically in front of you or online? Use a new case for a separate incident; I have not inferred immediate danger. Bystander-specific emergency guidance is not established by this case.'
+            if snapshot.memory.get('incident_scope_pending') or 'pause' in result.get('intents', []):
+                acknowledgement = 'This separate incident has not been merged into the original case. Start a separate case to continue with those details, or clarify that you are returning to the original incident. No immediate danger has been inferred.'
+        elif move is None and request in {'question','feedback'}:
+            acknowledgement = 'I cannot reliably answer that question right now. Questions should help with safety, current actions or reporting; you can leave a detail unknown and ask for your current help or summary.'
         changes['acknowledgement'] = acknowledgement
     changes['conflicts'] = conflicts
     from app.services.case_memory import derive_memory
     changes['memory'] = dict(derive_memory(facts, snapshot.turns, conflicts), revision=payload.expected_revision + 1)
+    if changes.get('conversation_control'):
+        changes['memory'].update({key:changes['conversation_control'][key]
+            for key in ('questions_paused','incident_scope_pending')})
     changes['attachments'] = [{'id':str(item.id), 'original_filename':item.original_filename,
         'mime_type':item.mime_type, 'file_size':item.file_size} for item in attachments]
     try:

@@ -343,7 +343,10 @@ def test_unsure_candidate_does_not_trigger_repeated_verification_on_next_two_tur
     assert state['turns'][-1]['fact_changes']['understanding']['candidates'][0]['status'] == 'needs_review'
     provider.output = json.dumps({'language': 'en', 'candidates': []})
     state, _, _ = send(client, 'I need a moment.', state)
-    assert state['turns'][-1]['fact_changes']['agent']['status'] == 'decided'
+    # This fake repeats remote access after a nonanswer. Defer that question as
+    # well as the original unsure candidate rather than counting it as success.
+    assert state['turns'][-1]['fact_changes']['agent']['status'] == 'fallback'
+    assert state['next_move'] is None or state['next_move']['related_field'] != 'remote_access'
     assert all('ongoing_loss' in c['answered_fields'] for c in contexts)
     assert all(not any(v['field'] == 'ongoing_loss' for v in c['candidates']) for c in contexts)
 
@@ -404,7 +407,7 @@ def test_apology_about_another_detail_does_not_authorize_amount_overwrite(client
 def test_reply_can_reference_only_currently_applicable_helpline(client, monkeypatch):
     install(monkeypatch, [candidate('money_lost', True, 'send'),
         candidate('signals', ['financial'], 'scammer'), candidate('payment_method', 'upi', 'UPI')],
-        move('CONTINUE_OPEN_CONVERSATION', 'story', 'Would you like to look at your next steps?',
+        move('ANSWER_RELEVANT_QUESTION', 'story', 'Would you like to look at your next steps?',
             quick_replies=['Report to 1930', 'Wait']))
     state, _, _ = send(client, 'A scammer made me send money via UPI.')
     assert state['next_move']['quick_replies'][0] == 'Report to 1930'

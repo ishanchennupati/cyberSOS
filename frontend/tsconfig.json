@@ -35,7 +35,11 @@
     "**/*.tsx",
     ".next/types/**/*.ts",
     ".next-phase4/types/**/*.ts",
-    ".next-phase5/types/**/*.ts"
+    ".next-phase5/types/**/*.ts",
+    ".next-phase6/types/**/*.ts",
+    ".next-phase6-final/types/**/*.ts",
+    ".next-phase6-finish/types/**/*.ts",
+    ".next-phase6-manual/types/**/*.ts"
   ],
   "exclude": [
     "node_modules",

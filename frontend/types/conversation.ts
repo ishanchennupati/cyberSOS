@@ -68,7 +68,10 @@ export interface ConversationTurn {
     knowledge_sources?: { id:string; title:string; url:string; reviewed_on:string; version:string }[];
     updates?: { field: string; before: unknown; after: unknown; correction: boolean }[];
     understanding?: CandidateUnderstanding; conflicts?: string[]; acknowledgement?: string;
-    next_move?: NextMove | null; agent?: { status: 'decided' | 'fallback'; reason: string | null;
+    conversation_control?: {request:string; questions_paused:boolean; incident_scope_pending:boolean};
+    help_view?: {known_facts:Record<string,{value:unknown}>; unknowns:string[]; action_ids:string[]; meaning:string};
+    review_prompt?: boolean;
+    next_move?: NextMove | null; agent?: { status: 'decided' | 'fallback' | 'not_requested'; reason: string | null;
       category?: 'PROVIDER_UNAVAILABLE' | 'PROVIDER_5XX' | 'PROVIDER_QUOTA' | 'PROVIDER_AUTH' | 'PROVIDER_MODEL_UNAVAILABLE' | 'TIMEOUT' | 'MALFORMED_OUTPUT' | 'VALIDATION_REJECTED' | 'APPLICATION_ERROR' | null;
       invocation_succeeded?: boolean; parsing_succeeded?: boolean; validation_succeeded?: boolean;
       proposed_type?: string | null; rejection_reason?: string | null; http_status?: number | null } };
@@ -90,7 +93,8 @@ export interface ConversationState {
   completions: Completion[];
   projection: { reference: string; revision: number; plan_revision: number; status: string;
     working_understanding: string[]; known_facts: Record<string, {value: unknown; source_turn: string | null; origin: string; verified: boolean; evidence_id?:string|null; source_deleted?:boolean}>;
-    evidence_count: number; completed_actions: number; completion_meaning: string };
+    evidence_count: number; completed_actions: number; completion_meaning: string;
+    current_help?: {known_facts:Record<string,{value:unknown}>; unknowns:string[]; action_ids:string[]; meaning:string} };
   memory: { revision: number; [key: string]: unknown };
   evidence_reviews?: EvidenceAnalysis[];
   route_hint?: string|null;

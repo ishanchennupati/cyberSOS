@@ -1,5 +1,68 @@
 # Phase status
 
+## Phase 6 manual-test repair — completed 2026-10-11
+
+The reported recap/question/composer defects are repaired within the declared
+English synthetic scope. Full backend: 574 passed; frontend contracts: 13 passed;
+production build and desktop/mobile send/retry/draft-race checks pass. The complete
+live ten-message replay and explicit understanding review/plan confirmation pass.
+Its final greeting exposed an overly broad recap guard; the captured live output
+was subsequently reproduced and fixed through the owned API, with the full suite
+passing after that refinement. See [repair evidence](phase6-manual-repair.md) for
+the live/mock distinction, exact commands, build limitation and manual journey.
+
+The inline personalized plan followed by a filled draft case sheet is now an
+explicit [Phase 7 enhancement](phases/phase-07.md). Phase 7 implementation has not
+started. No model switch, paid fallback, migration, commit, push or deployment
+was part of this repair. Earlier core acceptance counts below remain historical.
+
+## Phase 6 — completed for declared scenarios 2026-10-11
+
+Conversation repair acceptance now passes: the final live three-route run has
+23 successful understanding turns, 15 validated follow-ups, eight application
+control responses and zero fallbacks. Independently verified live narrative
+drafting succeeds on all six initial/corrected packets, without quota fallback.
+The full backend suite passes 561 tests; 13 frontend contracts, production build,
+mobile/desktop reporting and existing Phase 4/5 evidence/memory journeys pass.
+Configured PostgreSQL migration, review/replay/PDF/correction/isolation pass with
+synthetic fake AI. Six actual live-draft PDFs were parsed and inspected.
+
+Public official eligibility and anonymous-form constraints are now source-linked
+and separately scoped. Authenticated fields/limits remain explicitly unverified
+as the Phase 6 contract permits; no registration, identity or OTP is collected
+here. Completion covers the declared initial English/India scenarios, not every
+official form or crime category. See [final acceptance](phase6-final-acceptance.md)
+for exact evidence, limits, manual journey and roadmap review. Historical failures
+below remain historical. No Phase 7 implementation, model switch, paid fallback, commit,
+push or deployment.
+
+## Phase 6 prerequisite conversation repair — 2026-10-10
+
+**HISTORICAL REPAIR CHECKPOINT; ACCEPTANCE GATE OPEN.** Core had not started at
+this checkpoint; the user subsequently authorized core implementation as recorded above.
+The Phase 5 money fallback, persistent stop/help/conclusion control, question
+disposition, approved current-help presentation and witness isolation have been
+implemented in the existing conversation/revision/memory path. Resumed backend
+final backend suite: 518 passed in 51.84s; frontend contracts 13 passed; resumed production build,
+fake three-route mobile/browser and existing Phase 4/5/evidence regressions passed.
+Configured PostgreSQL control/replay/correction checks passed freshly with fake AI;
+private-storage evidence checks passed in the earlier checkpoint. Native generation
+now matches each move shape; account/device access is separated, service-account
+suffixes compare correctly, unsafe optional imperative buttons are omitted, and
+unchanged unanswered questions are deferred after corrections. Unknown-as-no-loss
+wording has a new grounding regression. The resumed live checkpoint completed 23
+turns with all understanding calls successful and three follow-up rejections, zero
+malformed schema failures. Remaining work concerns capability/purpose versus
+instruction validation, genuine procedural model output, redundant open-story
+requests and fresh live verification of unknown-loss grounding.
+Live runs exposed provider failures, genuine repeated-known questions and false
+wording/field rejection; do not label the checkpoint accepted based on unit/build
+passes. Control presentation is application-rendered and explicitly distinguished
+from live follow-up calls. No model switch, billing, reporting code, commit or
+deployment. See [repair evidence and resume steps](phase6-conversation-repair.md)
+and [execution plan](plans/6.md). The usage-limit interruption was resumed by the
+user; no approval check was bypassed. Roadmap NO CHANGE.
+
 ## Phase 5 implementation — 2026-10-07
 
 **Quality-audit correction:** subsequent offline reproductions confirmed repeated

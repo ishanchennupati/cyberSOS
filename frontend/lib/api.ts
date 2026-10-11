@@ -19,6 +19,18 @@ import type {
 } from "@/types/evidence";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+import type {ReportingDraft,ReportingPreview} from '@/types/reporting';
+
+export function getReporting(id:string){return request<ReportingPreview>(`/api/v1/incidents/${id}/reporting`,{cache:'no-store',signal:AbortSignal.timeout(15000)});}
+export function prepareReporting(id:string,payload:{draft_id:string;expected_revision:number}){return request<ReportingDraft>(`/api/v1/incidents/${id}/reporting/drafts`,{method:'POST',body:JSON.stringify(payload),signal:AbortSignal.timeout(65000)});}
+export function reviewReporting(id:string,draftId:string,revision:number){return request<ReportingDraft>(`/api/v1/incidents/${id}/reporting/drafts/${draftId}/review`,{method:'POST',body:JSON.stringify({expected_revision:revision})});}
+export function reportingExportUrl(id:string,draftId:string,format:'pdf'|'json'|'html'){return `${API_URL}/api/v1/incidents/${id}/reporting/drafts/${draftId}/export?format=${format}`;}
+export function getReviewedReporting(id:string,draftId:string){return request<{packet:ReportingDraft['packet'];narrative:ReportingDraft['narrative']}>(`/api/v1/incidents/${id}/reporting/drafts/${draftId}/export`,{cache:'no-store',signal:AbortSignal.timeout(15000)});}
+export async function downloadReporting(id:string,draftId:string,format:'pdf'|'json'){
+  const response=await fetch(reportingExportUrl(id,draftId,format),{credentials:'include',cache:'no-store',signal:AbortSignal.timeout(20000)});
+  if(!response.ok){const body=await response.json().catch(()=>null);throw new ApiError(typeof body?.detail==='string'?body.detail:'Download failed. Reload and check the packet review.',response.status);}
+  return response.blob();
+}
 
 import type { ConversationState, TurnRequest } from '@/types/conversation';
 import type { EvidenceAnalysis } from '@/types/conversation';

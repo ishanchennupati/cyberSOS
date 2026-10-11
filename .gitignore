@@ -60,3 +60,7 @@ backend/test.db-journal
 # Editors
 .vscode/
 .idea/
+frontend/.next-phase6/
+frontend/.next-phase6-final/
+frontend/.next-phase6-finish/
+frontend/.next-phase6-manual/

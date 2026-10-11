@@ -61,7 +61,10 @@ def build_context(facts, understanding, conflicts, turns, message, plan, evidenc
     from app.services.case_memory import derive_memory, recall
     from app.services.knowledge import relevant_knowledge
     answered = set(answered)
-    if answered & {'occurred_at','time_window'}: answered.update({'occurred_at','time_window'})
+    timing_fields = {'occurred_at','time_window','timestamp_text'}
+    if answered & timing_fields: answered.update(timing_fields)
+    if facts.occurred_at or facts.time_window or facts.timestamp_text:
+        answered.update(timing_fields)
     try:
         knowledge = relevant_knowledge(message)
         retrieval_status = 'found' if knowledge else 'no_support'
@@ -72,6 +75,8 @@ def build_context(facts, understanding, conflicts, turns, message, plan, evidenc
         and field not in {'occurred_at' if facts.time_window else ''} and field not in answered]
     if not facts.signals and 'signals' not in answered:
         unknown.append('signals')
+    if facts.signals and not facts.identifiers and 'identifiers' not in answered:
+        unknown.append('identifiers')
     if facts.payment_method.value in {'upi','bank_transfer','net_banking','debit_card','credit_card'}:
         unknown = [field for field in unknown if field != 'bank_involved']
     transaction_established = facts.money_lost is True and (facts.authorization != 'unknown' or
@@ -79,6 +84,23 @@ def build_context(facts, understanding, conflicts, turns, message, plan, evidenc
     if not transaction_established:
         payment_details={'authorization','payment_method','payment_app','transaction_id','transaction_status','bank_involved','currency'}
         unknown=[field for field in unknown if field not in payment_details]
+    if 'financial' not in facts.signals and facts.money_lost is not True:
+        unknown = [field for field in unknown if field not in {'money_lost','amount','ongoing_loss','recipient'}]
+    if facts.signals and not set(facts.signals) & {'financial','device_compromise','account_takeover'}:
+        unknown = [field for field in unknown if field not in {'remote_access','account_compromised','credentials_exposed'}]
+    # Device control and service-account compromise have different policy effects.
+    # An account-only story does not justify investigating device control.
+    if facts.signals and not set(facts.signals) & {'financial','device_compromise'}:
+        unknown = [field for field in unknown if field != 'remote_access']
+    if facts.signals and 'threats' not in facts.signals:
+        unknown = [field for field in unknown if field != 'immediate_danger']
+    if facts.signals and 'impersonation' not in facts.signals and not (facts.claimed_person or facts.claimed_organization):
+        unknown = [field for field in unknown if field not in {'claimed_person','claimed_organization'}]
+    from app.services.conversation_control import dispositions, suppressed_fields
+    suppressed = suppressed_fields(facts, dispositions(facts, turns))
+    answered.update(suppressed)
+    unknown = [field for field in unknown if field not in suppressed]
+    story_established = bool(facts.signals) and bool(facts.platform or transaction_established or facts.threat_text or facts.message_text)
     context = dict(facts=data, unknown_fields=unknown, answered_fields=list(answered),
         conflicts=conflicts, candidates=[{'field': c['field'], 'value': c['value'],
             'status': c['status'], 'source_text': c['source_text'][:256],
@@ -91,9 +113,10 @@ def build_context(facts, understanding, conflicts, turns, message, plan, evidenc
             'why': a.why, 'phase': a.phase.value, 'phone': a.phone} for a in plan.actions],
         evidence=evidence, evidence_restrictions=['no credentials', 'no identity documents',
             'no explicit intimate media', 'no child sexual abuse material'],
-        capabilities={'safe_evidence_upload': True, 'ai_evidence_extraction': True},
+        capabilities={'safe_evidence_upload': True, 'ai_evidence_extraction': True,
+            'report_submission':False, 'direct_recovery':False, 'report_preparation':True},
         case_state={'has_applicable_actions': bool(plan.actions), 'intake_completion_required': False,
-            'transaction_established':transaction_established})
+            'transaction_established':transaction_established, 'story_established':story_established})
     # Preserve canonical truth and the current message. Recall is expendable,
     # whereas truncating facts would change the meaning of the case.
     while len(json.dumps(context, ensure_ascii=False)) > MAX_CONTEXT_CHARS and context['memory']['older_recall']:
@@ -170,8 +193,8 @@ KNOWN_QUESTION_TERMS = {
     'payment_method': r'^(?:how.*(?:pay|sent|transfer)|what.*payment (?:method|rail))\b',
     'payment_app': r'\b(which|what) (app|payment app)\b',
     'transaction_id': r'^(?:what|do you have)\b.*\b(transaction reference|utr|transaction id)\b',
-    'remote_access': r'^(?:can|does|is|has)\b.*\b(still|currently|now)\b.*\b(access|control|connected)\b',
-    'account_compromised': r'^(?:can|does)\b.*\b(access|log in|login)\b.*\b(account)\b',
+    'remote_access': r'^(?:can|does|is|has)\b.*\b(still|currently|now)\b.*\b(access|control|connected)\b.*\b(device|phone|computer|laptop)\b',
+    'account_compromised': r'^(?:can|does)\b.*\b(access|log in|login)\b.*\b(accounts?)\b',
     'ongoing_loss': r'^(?:is|are)\b.*\b(still|continuing|ongoing|further)\b.*\b(money|loss|transactions|payments)\b',
     'evidence_available': r'^(?:do you have|have you saved)\b.*\b(evidence|screenshot|message|receipt|record)\b',
 }
@@ -188,7 +211,7 @@ INQUIRY_TOPIC = {
     'evidence_available': r'evidence|screenshot|message|receipt|records',
     'evidence_mentioned': r'evidence|screenshot|message|receipt|records',
     'claimed_organization': r'organization|organisation|company|claim|represent',
-    'claimed_person': r'who|claim|person', 'identifiers': r'contact|profile|phone|email|upi|url|account|identifier',
+    'claimed_person': r'who|claim|person', 'identifiers': r'contact|profile|phone|email|upi|url|account|identif|username|handle',
     'signals': r'what else|happened|incident',
     'platform': r'platform|service|app|account|website',
     'immediate_danger': r'safe|danger|physical|hurt|threat',
@@ -230,32 +253,76 @@ def grounded_text(text, context):
         if not any(identifier == item['value'] for item in facts['identifiers']):
             reject('UNGROUNDED_IDENTIFIER')
     # Caller organization is never evidence of ownership of a named bank account.
+    service = re.sub(r'\s+account$', '', (facts.get('platform') or '').casefold()).strip()
     for ownership in re.finditer(r'\byour\s+(?!(?:bank|account)\b)([\w-]+)(?:\s+bank)?\s+account\b|\byour\s+([\w-]+)\s+bank\b', text, re.I):
         named = ownership.group(1) or ownership.group(2)
-        if ownership.group(2) or ' bank ' in ownership.group(0).casefold() or named.casefold() != (facts.get('platform') or '').casefold():
+        if ownership.group(2) or ' bank ' in ownership.group(0).casefold() or named.casefold() != service:
             reject('UNSUPPORTED_ACCOUNT_OWNERSHIP')
     for url in re.findall(r'https?://[^\s?]+|www\.[^\s?]+', text):
         if not any(url.rstrip('.,') == item['value'] for item in facts['identifiers']) and not any(
             url.rstrip('.,/') == item['url'].rstrip('/') for item in context.get('knowledge', [])):
             reject('UNSUPPORTED_URL')
-    if OUTCOME.search(text):
+    outcome_text = text
+    capabilities = context.get('capabilities', {})
+    # Application-scoped negation describes a limitation, not an external
+    # prediction. Normalize only that negated predicate/object; a positive claim
+    # elsewhere in the same sentence must still fail the outcome guard.
+    outcome_text = re.sub(r'\b(?:CyberSOS|we|I)\s+(?:do not|does not|don.t|doesn.t|cannot|can.t|never)\s+'
+        r'guarantee\s+(?:any\s+)?(?:outcomes?|results?|refunds?|recovery)\b',
+        'no result is promised', outcome_text, flags=re.I)
+    if capabilities.get('report_submission') is False and capabilities.get('direct_recovery') is False:
+        # An explicitly application-scoped denial of an unimplemented capability
+        # is honest process information, not a recovery claim about this case.
+        outcome_text = re.sub(r'(\bCyberSOS\b[^.!?]*?,\s*but it (?:does not|cannot)\s+'
+            r'(?:submit reports or )?)recover (?:accounts|funds|money)(?: directly)?(?: for you)?',
+            r'\1perform these operations',
+            outcome_text, flags=re.I)
+        outcome_text = re.sub(r'(\b(?:CyberSOS|we)\s+(?:cannot|do not|does not|can.t)\s+'
+            r'(?:submit reports or )?)recover (?:accounts|funds|money)(?: directly)?(?: for you)?',
+            r'\1perform these operations', outcome_text, flags=re.I)
+    if OUTCOME.search(outcome_text):
         reject('AUTHORITATIVE_OUTCOME')
     # Exposure is a valid investigative topic; requesting the secret itself is not.
-    if re.search(r'\b(?:what(?: is| was)?|tell|give|enter|type|share|upload|send|provide|attach|report)\b.{0,60}\b(?:otp|pin|password|credentials|card number|cvv|aadhaar|passport|intimate|nude|explicit)\b', text, re.I):
+    restricted_text = re.sub(r'\bnon[- ]explicit\s+(screenshots?|messages?|text|records?)\b',
+        r'safe \1', text, flags=re.I)
+    if re.search(r'\b(?:what(?: is| was)?|tell|give|enter|type|share|upload|send|provide|attach|report)\b.{0,60}\b(?:otp|pin|password|credentials|card number|cvv|aadhaar|passport|intimate|nude|explicit)\b', restricted_text, re.I):
         reject('RESTRICTED_INFORMATION_REQUEST')
     # Explaining why a question improves an already approved report adds no
     # procedure. Other verbs/targets and secret requests remain prohibited.
     instruction_text = re.sub(r'\bso you can report\b','so reporting',text,flags=re.I) if re.match(r'^I ask\b',text,re.I) and context.get('approved_actions') else text
+    instruction_text = re.sub(r'\b(?:the )?information you need to report\b', 'reporting information',
+        instruction_text, flags=re.I)
+    if any(item.get('phase') == 'REPORT' for item in context.get('approved_actions', [])):
+        # A purpose clause without a destination/procedure is preparation, not
+        # an instruction. Preserve all surrounding text for the other checks.
+        instruction_text = re.sub(r'\bso you can report (the incident|abuse|harassment)(?: to official channels)?'
+            r'(?=\s+safely(?:[.!?]|$)|\s*[,;.!?]|$)', r'for reporting \1', instruction_text, flags=re.I)
+    # Distinguish the application describing preparation from a command to the
+    # citizen. Only the abstract reporting purpose is normalized, never its
+    # surrounding text or a destination, procedure, deadline or extra action.
+    if capabilities.get('report_preparation'):
+        def preparation_clause(match):
+            sentence = match.group(0)
+            if not re.match(r'\s*CyberSOS\s+(?:helps|can help|guides)\b', sentence, re.I):
+                return sentence
+            if re.search(r'\bhow to secure your account\b', sentence, re.I) and not any(
+                    item['id'].startswith('secure_') for item in context.get('approved_actions', [])):
+                return sentence
+            return re.sub(r'\b(?:so you can (?:review (?:them|these|it) and )?|and )report '
+                r'(?:it|this|abuse|(?:the )?(?:incident|harassment))'
+                r'(?: to official channels)?(?: (?:safely|properly|officially))?(?=[.!?]|$)',
+                'for reporting', sentence, flags=re.I)
+        instruction_text = re.sub(r'[^.!?]+[.!?]?', preparation_clause, instruction_text)
     if re.search(r'\b(?:you (?:should|must|need to|have to|can|could)|please)\s+(?:' + ACTION_VERB + r')\b', instruction_text, re.I):
         reject('ACTION_IN_INVESTIGATION')
-    for sentence in re.split(r'(?<=[.!?])\s+', text):
+    for sentence in re.split(r'(?<=[.!?])\s+', instruction_text):
         for conjunction in re.finditer(r'\b(?:and|then)\s+(?:now\s+)?(?:'+ACTION_VERB+r')\b',sentence,re.I):
             history=sentence[:conjunction.start()]
             if not re.search(r'\b(?:had you|made you|asked you|told you|you reported|you said|you were|led you)\b',history,re.I):
                 reject('ACTION_IN_INVESTIGATION')
-    if re.search(r'(?:^|[.!?]\s+)(?:' + ACTION_VERB + r')\b', text, re.I):
+    if re.search(r'(?:^|[.!?]\s+)(?:' + ACTION_VERB + r')\b', instruction_text, re.I):
         reject('ACTION_IN_INVESTIGATION')
-    if re.search(r'(?:[,;:]\s*|\b(?:should|must|need to|have to)\s+)(?:' + ACTION_VERB + r')\b', text, re.I):
+    if re.search(r'(?:[,;:]\s*|\b(?:should|must|need to|have to)\s+)(?:' + ACTION_VERB + r')\b', instruction_text, re.I):
         reject('ACTION_IN_INVESTIGATION')
     if re.search(r'\b(?:you (?:should|must|need to|have to|can|could)|please)\s+(?:\w+\s+){0,3}(?:'+ACTION_VERB+r')\b',instruction_text,re.I):
         reject('ACTION_IN_INVESTIGATION')
@@ -280,6 +347,17 @@ def validate_move(move, context):
     """Validate references, applicability, grounding and safety, not sentence grammar."""
     facts, field = context['facts'], move.related_field
     text = move.message.strip()
+    question_text = re.split(r'(?<=[.!])\s+', text)[-1]
+    if move.type == 'ANSWER_RELEVANT_QUESTION' and '?' in question_text and re.match(
+            r'^(?:would|do) you (?:like|want) to continue\b', question_text, re.I):
+        # Consent to continue is a conversational choice, never a Yes/No fact
+        # about device access, payment authorization or another incident field.
+        move = move.model_copy(update={'related_field':'story'})
+        field = 'story'
+    if move.type == 'CONTINUE_OPEN_CONVERSATION' and field == 'story' and 'story' in context['answered_fields'] and '?' in text:
+        reject('STORY_DECLINED_OR_DEFERRED')
+    if move.type == 'CONTINUE_OPEN_CONVERSATION' and context.get('case_state', {}).get('story_established'):
+        reject('STORY_ALREADY_ESTABLISHED')
     if move.type in {'ASK_CLARIFICATION', 'CONTINUE_OPEN_CONVERSATION', 'ANSWER_RELEVANT_QUESTION'} and context.get('case_state',{}).get('transaction_established') is False and '?' in text and re.search(
         r'what payment method|which payment|how did you pay|(?:this|the) (?:transaction|payment)|did you approve',text,re.I):
         reject('UNSUPPORTED_TRANSACTION_PREMISE')
@@ -293,6 +371,11 @@ def validate_move(move, context):
     # must remain distinguishable from an assertion about this citizen.
     asserted = ' '.join(sentence for sentence in re.split(r'(?<=[.!?])\s+',text)
         if not sentence.endswith('?') and not re.search(r'\b(?:if|whether|may|might|possible)\b',sentence,re.I))
+    if facts.get('money_lost') is not False and re.search(
+        r'\bno (?:(?:payment|transaction) (?:or|and) )?(?:financial|money) loss\b|'
+        r'\bno money (?:was |has been )?(?:lost|sent|taken)\b|'
+        r'\byou (?:did not|didn.t|have not|haven.t) (?:lose|lost) (?:any )?money\b', asserted, re.I):
+        reject('UNSUPPORTED_LOSS_CLAIM')
     claim_fields = {
         'account_compromised': r'\byour (?:bank )?account\b.{0,30}\b(?:hacked|compromised|taken over)\b',
         'credentials_exposed': r'\byour (?:password|credentials|pin|otp)\b.{0,30}\b(?:exposed|shared|stolen|leaked)\b',
@@ -315,7 +398,8 @@ def validate_move(move, context):
         document = knowledge.get(reference.id)
         if document is None or reference.claim != document['text']:
             reject('UNSUPPORTED_KNOWLEDGE_REFERENCE')
-    if '1930' in text and (not re.search(r'\b(?:financial|fraud|money)\b',text,re.I)
+    if '1930' in text and (not (any(item.get('phone') == '1930' for item in context['approved_actions']) or
+            re.search(r'\b(?:financial|fraud|money)\b',text,re.I))
             or re.search(r'\b(?:every|all|harassment|stalking|emergency|threats|blackmail)\b',text,re.I)):
         reject('UNSUPPORTED_HELPLINE_SCOPE')
     if re.search(r'\b(?:government|official portal|police|legal|fir)\b', text, re.I) and not move.knowledge_refs:
@@ -328,7 +412,10 @@ def validate_move(move, context):
         reject('UNSUPPORTED_REPORTING_DEADLINE')
     if text.count('?') > 1:
         reject('MULTIPLE_QUESTIONS')
-    if re.search(r'\b(?:bank|police|government|complaint|funds)\b.{0,35}\b(?:frozen|accepted|investigating|reviewing|approved|recovered)\b', text, re.I):
+    # Citizen authorization is checked above and cannot be confused with a bank
+    # approving a complaint merely because both words occur in the same sentence.
+    status_text = re.sub(r'\byou (?:approved|authorized|authorised)\b', 'citizen payment permission', text, flags=re.I)
+    if re.search(r'\b(?:bank|police|government|complaint|funds)\b.{0,35}\b(?:frozen|accepted|investigating|reviewing|approved|recovered)\b', status_text, re.I):
         reject('FAKE_EXTERNAL_STATUS')
     action = None
     if move.action_id:
@@ -338,10 +425,33 @@ def validate_move(move, context):
     # An explanation is prose about a reviewed action. Procedures stay in the
     # independently rendered policy card and cannot be expanded in model prose.
     grounded_text(text, context)
+    previous = context.get('current_move') or {}
+    review_offered = context.get('case_state', {}).get('review_offered', False)
+    if move.type == 'ACKNOWLEDGE_AND_WAIT' and (previous.get('type') == 'ACKNOWLEDGE_AND_WAIT' or review_offered) and not context.get('facts_changed', False):
+        prior_fields = {ref['field'] for ref in previous.get('fact_refs', [])}
+        repeated_fact = any((ref.field in prior_fields or review_offered) and isinstance(ref.value, str) and
+            len(ref.value)>2 and ref.value.casefold() in text.casefold() for ref in move.fact_refs)
+        recap = re.search(r'\b(?:I (?:note|understand|see|have (?:noted|recorded))|'
+            r'you (?:experienced|faced|received|reported|were|have|do not|don.t))\b',text,re.I)
+        if repeated_fact and recap or len(text)>80 and text == previous.get('message'):
+            reject('REPEATED_CASE_RECAP')
     if move.type == 'ANSWER_RELEVANT_QUESTION' and '?' in text:
-        if field is None or field not in context['unknown_fields']:
+        consent = re.match(r'^(?:would|do) you (?:like|want)\b', question_text, re.I)
+        repeat_story = field == 'story' and not consent and (
+            context.get('case_state', {}).get('story_established') or 'story' in context['answered_fields'])
+        unavailable_target = field is None or field != 'story' and field not in context['unknown_fields']
+        if repeat_story or unavailable_target:
+            # Preserve an independently safe answer while omitting its unnecessary
+            # follow-up. The entire proposal passed grounding/security checks
+            # above; revalidate the retained answer and discard question buttons.
+            parts = re.split(r'(?<=[.!])\s+', text)
+            body = ' '.join(parts[:-1]).strip()
+            if body and '?' not in body:
+                return validate_move(move.model_copy(update={'message':body,'related_field':None,'quick_replies':[]}), context)
+            reject('STORY_ALREADY_ESTABLISHED' if repeat_story else 'ANSWER_FOLLOW_UP_MUST_TARGET_UNKNOWN_FACT')
+        if field is None or field != 'story' and field not in context['unknown_fields']:
             reject('ANSWER_FOLLOW_UP_MUST_TARGET_UNKNOWN_FACT')
-    if move.type in {'ASK_CLARIFICATION', 'VERIFY_INFORMATION', 'RESOLVE_CONFLICT'} or move.type == 'ANSWER_RELEVANT_QUESTION' and '?' in text:
+    if move.type in {'ASK_CLARIFICATION', 'VERIFY_INFORMATION', 'RESOLVE_CONFLICT'} or move.type == 'ANSWER_RELEVANT_QUESTION' and '?' in text and field != 'story':
         if move.type in {'ASK_CLARIFICATION','ANSWER_RELEVANT_QUESTION'} and field not in context['unknown_fields']:
             reject('FACT_ESTABLISHED_OR_ANSWERED')
         if move.type == 'VERIFY_INFORMATION' and (field in context['answered_fields'] or not any(
@@ -354,8 +464,12 @@ def validate_move(move, context):
         question_text = re.split(r'(?<=[.!])\s+', text)[-1]
         if not re.search(INQUIRY_TOPIC.get(field, r'(?!)'), question_text, re.I):
             reject('QUESTION_FIELD_MISMATCH')
+        if field == 'immediate_danger' and re.search(r'\b(?:safe|free from|out of danger)\b', question_text, re.I):
+            reject('INVERTED_DANGER_QUESTION')
         if field == 'remote_access' and re.search(r'\b(?:software|app|application|installed|installation)\b', question_text, re.I):
             reject('SOFTWARE_PRESENCE_IS_NOT_REMOTE_ACCESS')
+        if field == 'remote_access' and re.search(r'\baccount\b', question_text, re.I):
+            reject('ACCOUNT_ACCESS_IS_NOT_DEVICE_CONTROL')
         if re.search(r'\b(?:how (?:can|do|could|should|would)|how to|steps to|instructions to)\b', question_text, re.I):
             reject('PROCEDURE_IS_NOT_INVESTIGATION')
         if re.match(r'^(?:can|could|would) you\b', question_text, re.I) and re.search(r'\b(?:' + ACTION_VERB + r')\b', question_text, re.I):
@@ -365,6 +479,8 @@ def validate_move(move, context):
             if len(targets) != 1 or not names_payment_verification_target(question_text, targets[0]['value']):
                 reject('VERIFICATION_TARGET_MISMATCH')
     elif move.type == 'REQUEST_EVIDENCE':
+        if 'evidence_available' in context['answered_fields'] or field in context['answered_fields']:
+            reject('EVIDENCE_DECLINED_OR_DEFERRED')
         if context['evidence'] or facts['evidence_available'] is False:
             reject('EVIDENCE_PRESENT_OR_UNAVAILABLE')
         if not (facts['money_lost'] or facts['evidence_mentioned'] or facts['identifiers'] or set(facts['signals']) & {'threats','harassment','impersonation'}):
@@ -372,28 +488,51 @@ def validate_move(move, context):
         if not context.get('capabilities', {}).get('ai_evidence_extraction') and re.search(r'\b(?:extract|ocr|analyse|analyze|identify)\b', text, re.I):
             reject('UNAVAILABLE_EVIDENCE_CAPABILITY')
     elif move.type in {'ACKNOWLEDGE_AND_WAIT', 'EXPLAIN_APPROVED_ACTION'} and '?' in text:
+        if move.type == 'ACKNOWLEDGE_AND_WAIT' and field is None:
+            # As with a process answer, preserve independently grounded prose
+            # after all full-proposal safety checks, without an unneeded question.
+            parts=re.split(r'(?<=[.!])\s+',text)
+            body=' '.join(parts[:-1]).strip()
+            if body and '?' not in body:
+                return validate_move(move.model_copy(update={'message':body,'quick_replies':[]}),context)
         reject('WAITING_MOVE_CANNOT_ASK')
     for known, pattern in KNOWN_QUESTION_TERMS.items():
         established = facts.get(known) not in (None, 'unknown', []) or known in context['answered_fields']
         if known == 'occurred_at' and facts['time_window']:
             established = True
         question_text = re.split(r'(?<=[.!])\s+', text)[-1]
+        specific_topic = known != 'payment_app' or re.search(r'\bpayment app\b', question_text, re.I)
+        if field == 'story' and specific_topic and '?' in question_text and known not in context['unknown_fields'] and re.search(pattern, question_text, re.I):
+            reject('QUESTION_FIELD_NOT_RELEVANT')
         if '?' in question_text and established and re.search(pattern, question_text, re.I) and not (known == field and move.type == 'RESOLVE_CONFLICT'):
             reject('REPEATED_ESTABLISHED_FACT')
     confirmation = field == 'payment_method' and move.type == 'VERIFY_INFORMATION'
+    accepted_replies = []
     for reply in move.quick_replies:
         if valid_reply(reply, field) or reply.casefold().strip() in {'skip', 'skip for now', 'not sure', 'yes', 'no'}:
+            accepted_replies.append(reply)
             continue
         # A citizen may choose an already approved phone handoff. This does not
         # authorize model-created instructions or an unapproved destination.
         handoff = re.fullmatch(r'(?:call|report to)\s+(\d{3,6})', reply.strip(), re.I)
         if handoff and any(item.get('phone') == handoff.group(1) for item in context['approved_actions']):
+            accepted_replies.append(reply)
             continue
         # Options propose citizen answers, not authoritative instructions or facts.
         # Validate safety and unsupported identifiers/numbers instead of a wording allowlist.
-        grounded_text(reply, context)
+        try:
+            grounded_text(reply, context)
+        except MoveRejected as exc:
+            # Optional imperative buttons must not hide an independently grounded
+            # answer. Omit them; never reinterpret them as authorized actions.
+            # Secret requests, fabricated destinations/outcomes and other failures
+            # still reject the proposal in full.
+            if move.type == 'ANSWER_RELEVANT_QUESTION' and str(exc) == 'ACTION_IN_INVESTIGATION':
+                continue
+            raise
+        accepted_replies.append(reply)
     check_values(move.model_dump(mode='json'))
-    return move.model_copy(update={'message': text})
+    return move.model_copy(update={'message': text, 'quick_replies':accepted_replies})
 
 
 
@@ -456,7 +595,9 @@ def decide(context):
         proposed = NextMove.model_validate_json(output)
         diagnostics.update(parsing_succeeded=True, proposed_type=proposed.type)
         move = validate_move(proposed, context)
-        return move, dict(diagnostics, status='decided', reason=None, category=None, validation_succeeded=True)
+        return move, dict(diagnostics, status='decided', reason=None, category=None, validation_succeeded=True,
+            omitted_quick_replies=len(proposed.quick_replies)-len(move.quick_replies),
+            omitted_follow_up=proposed.message.strip()!=move.message)
     except Exception as exc:
         return None, dict(diagnostics, reason=failure_reason(exc), category=failure_category(exc),
             validation_errors=[{'loc': list(e['loc']), 'type': e['type']} for e in exc.errors()[:8]] if isinstance(exc, ValidationError) else [],

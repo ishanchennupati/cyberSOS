@@ -36,6 +36,13 @@ or replace its form. The continuing case remains open to corrections and new evi
 
 ## Currently implemented foundations
 
+- Phase 6 reporting artifact in chat: reviewed canonical packet, separate packet
+  approval, fact/identifier/narrative copy, private PDF/JSON/print and verified
+  external handoff. Corrections invalidate earlier approvals and exports. See
+  [final acceptance and verification](docs/phase6-final-acceptance.md). Conversation
+  repair passes; authenticated portal limits remain explicitly unverified.
+  Configured development PostgreSQL is migrated through `20261010_reporting`.
+
 - Phase 4 direct conversation, natural text, optional quick replies, relevant
   questions, corrections, skip/pause, persisted exchanges and source-linked case
   memory/older recall. Reviewed local retrieval supplies supporting knowledge.
@@ -91,7 +98,7 @@ moves into Phase 5; Phase 8 expands it.
 | [9](docs/phases/phase-09.md) | Multilingual voice input, editable transcript and reviewed language experience |
 | [10–12](docs/phases/README.md) | Security/privacy acceptance, authorized deployment rehearsal, synthetic beta and gated final acceptance |
 
-Voice, full localization, reviewed portal-field reporting, comprehensive incident
+Voice, full localization, authenticated portal-field coverage, comprehensive incident
 coverage, long-term recovery and production retention are not yet implemented.
 The [shared phase contracts](docs/phases/README.md) govern future execution;
 [AGENTS.md](AGENTS.md) defines permanent product/engineering rules. Older

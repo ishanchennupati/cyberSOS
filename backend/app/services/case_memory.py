@@ -57,11 +57,15 @@ def derive_memory(facts, turns, conflicts, message=''):
                 for p in facts.provenance if p.field == 'identifiers']
     declined, explanations = set(), set()
     paused = False
+    scope_pending = False
     for turn in turns:
         changes = turn.fact_changes
         intents = changes.get('understanding', {}).get('intents', [])
         if 'pause' in intents: paused = True
         if 'resume' in intents: paused = False
+        if 'conversation_control' in changes:
+            paused = changes['conversation_control']['questions_paused']
+            scope_pending = changes['conversation_control'].get('incident_scope_pending', scope_pending)
         if changes.get('answered_unknown'):
             declined.add(changes['answered_unknown'])
         for update in changes.get('updates', []):
@@ -71,7 +75,14 @@ def derive_memory(facts, turns, conflicts, message=''):
         if move.get('action_id'):
             explanations.add(move['action_id'])
     recalled = recall(turns, message)
+    from app.services.conversation_control import dispositions
+    from app.services.conversation_control import question_context
+    question_history = dispositions(facts, turns)
+    declined = {field for field in declined if field not in question_history or
+        question_history[field].get('context') == question_context(facts, field)}
     return {'revision': turns[-1].revision if turns else 0, 'facts': summary,
+        'question_dispositions': question_history,
+        'incident_scope_pending': scope_pending,
         'open_issues': list(conflicts), 'declined_fields': sorted(declined),
         'explained_actions': sorted(explanations), 'older_recall': recalled['older'], 'questions_paused': paused,
         'authority': 'derived; canonical facts supersede all historical claims'}

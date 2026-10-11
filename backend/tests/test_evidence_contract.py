@@ -48,12 +48,12 @@ def test_R2_every_frontend_operation_is_mounted_once(client):
         match = re.search(r'/(?:api/v1/|health)[^"\x27' + chr(96) + r']*', block)
         if not match:
             continue
-        path = re.sub(r"\$\{[^}]+\}", "{}", match.group())
-        method = re.search(r'method: [\'"](\w+)', block)
+        path = re.sub(r"\$\{[^}]+\}", "{}", match.group()).split('?')[0]
+        method = re.search(r'method:\s*[\'"](\w+)', block)
         if method is None:
             method = re.search(r'xhr.open\([\x27"](\w+)', block)
         calls.append((method.group(1) if method else "GET", path))
-    assert len(calls) == 30
+    assert len(calls) == 35
     assert set(calls) <= mounted, set(calls) - mounted
     routes = [(r.path, m) for r in app.routes if hasattr(r, "methods") for m in r.methods]
     assert len(routes) == len(set(routes)), "Duplicate registered method/path"

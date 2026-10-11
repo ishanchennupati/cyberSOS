@@ -1,6 +1,6 @@
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, Depends, HTTPException, Response,Query
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
@@ -23,6 +23,41 @@ router = APIRouter(prefix="/incidents", tags=["incidents"], dependencies=[Depend
 
 from app.schemas.conversation import ConversationRead, TurnRequest
 from app.services import conversation_service
+from app.schemas.reporting import DraftRequest,ReportReview,ReportingDraft
+from app.services import reporting
+
+
+@router.get('/{incident_id}/reporting')
+def reporting_preview(incident_id:uuid.UUID,response:Response,db:Session=Depends(get_db)):
+    response.headers['Cache-Control']='private, no-store'
+    return reporting.preview(db,_get_incident(db,incident_id))
+
+
+@router.post('/{incident_id}/reporting/drafts',response_model=ReportingDraft)
+def reporting_prepare(incident_id:uuid.UUID,payload:DraftRequest,response:Response,db:Session=Depends(get_db)):
+    response.headers['Cache-Control']='private, no-store'
+    return reporting.prepare(db,_get_incident(db,incident_id),payload)
+
+
+@router.post('/{incident_id}/reporting/drafts/{draft_id}/review',response_model=ReportingDraft)
+def reporting_review(incident_id:uuid.UUID,draft_id:uuid.UUID,payload:ReportReview,response:Response,db:Session=Depends(get_db)):
+    response.headers['Cache-Control']='private, no-store'
+    return reporting.review(db,_get_incident(db,incident_id),draft_id,payload)
+
+
+@router.get('/{incident_id}/reporting/drafts/{draft_id}/export')
+def reporting_export(incident_id:uuid.UUID,draft_id:uuid.UUID,format:str=Query('json',pattern='^(json|pdf|html)$'),db:Session=Depends(get_db)):
+    from app.services import reporting_export as renderer
+    data=reporting.export(db,_get_incident(db,incident_id),draft_id)
+    headers={'Cache-Control':'private, no-store','X-Content-Type-Options':'nosniff',
+        'Content-Security-Policy':"default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'"}
+    if format=='pdf':
+        headers['Content-Disposition']=f'attachment; filename="CyberSOS-{draft_id}.pdf"'
+        return Response(renderer.pdf(data),media_type='application/pdf',headers=headers)
+    if format=='html':return Response(renderer.printable(data),media_type='text/html',headers=headers)
+    from fastapi.responses import JSONResponse
+    headers['Content-Disposition']=f'attachment; filename="CyberSOS-{draft_id}.json"'
+    return JSONResponse(data,headers=headers)
 
 
 @router.get('/{incident_id}/conversation', response_model=ConversationRead)
@@ -60,7 +95,11 @@ def update_description(incident_id: uuid.UUID, payload: IncidentDescriptionUpdat
 
 @router.post("/{incident_id}/generate-summary", response_model=GenerateSummaryResponse)
 def generate_summary(incident_id: uuid.UUID, db: Session = Depends(get_db)):
-    return incident_service.generate_summary(_get_incident(db, incident_id))
+    from app.models.conversation import ConversationState
+    incident=_get_incident(db, incident_id)
+    if db.get(ConversationState,incident.id) is not None or (incident.facts or {}).get('kind')=='incident_understanding':
+        raise HTTPException(409,'Review the reporting packet in chat instead of generating a legacy summary.')
+    return incident_service.generate_summary(incident)
 
 
 @router.post("", response_model=IncidentRead, status_code=201)

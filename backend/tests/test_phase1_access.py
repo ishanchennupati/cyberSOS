@@ -2,6 +2,10 @@
 import pytest
 
 OPERATIONS = [
+    ('GET','incidents/{case}/reporting',None),
+    ('POST','incidents/{case}/reporting/drafts',{'draft_id':'11111111-1111-4111-8111-111111111111','expected_revision':0}),
+    ('POST','incidents/{case}/reporting/drafts/{plan}/review',{'expected_revision':0}),
+    ('GET','incidents/{case}/reporting/drafts/{plan}/export',None),
     ("GET", "incidents/{case}/conversation", None),
     ("POST", "incidents/{case}/conversation/turns", {"turn_id": "11111111-1111-4111-8111-111111111111", "expected_revision": 0, "field": "authorization", "value": "authorized"}),
     ("GET", "incidents/{case}", None),
