@@ -56,7 +56,12 @@ def test_completion_retry_and_correction_preserve_completion(client):
     state = response.json()
     assert len(state['completions']) == 1
     assert client.post(path + '/turns', json=payload).json() == state
-    state = send(client, path, state, value='authorized')[0].json()
+    # Completion deliberately does not replay the old intake question in Phase 7.
+    assert state['pending_question'] is None
+    response = client.post(path+'/turns', json={'turn_id':str(uuid.uuid4()),
+        'expected_revision':state['revision'], 'type':'message', 'text':'I approved the payment.'})
+    assert response.status_code == 200
+    state = response.json()
     assert state['completions'][0]['completed'] is True
 
 
@@ -145,7 +150,7 @@ def test_conversation_frontend_backend_contract(client):
     fields = re.search(r'export type FactField = (.*?);', source).group(1)
     assert set(re.findall(r"'([^']+)'", fields)) == {f.value for f in FactField}
     schema = app.openapi()['components']['schemas']
-    assert schema['TurnRequest']['properties']['type']['enum'] == ['shortcut', 'answer', 'correction', 'completion', 'message', 'evidence_review', 'route_hint', 'case_review']
+    assert schema['TurnRequest']['properties']['type']['enum'] == ['shortcut', 'answer', 'correction', 'completion', 'message', 'evidence_review', 'route_hint', 'case_review', 'case_update']
     _, state = start(client)
     assert set(state) == {'incident_id', 'revision', 'version', 'answered', 'facts', 'pending_question', 'next_move', 'turns', 'plan', 'completions', 'memory', 'projection', 'route_hint', 'evidence_reviews', 'understanding_review'}
     assert state['plan']['plan']['facts'] == state['facts']

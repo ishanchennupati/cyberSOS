@@ -198,6 +198,12 @@ def analyze(db, evidence, request):
     db.expire_all()
     current = db.get(Evidence, evidence_id)
     saved = db.get(EvidenceAttempt, attempt_id)
+    from app.services.lifecycle import available
+    from app.models.incident import Incident
+    if not current or not available(db.get(Incident, current.incident_id)):
+        raise HTTPException(404, 'Private evidence is no longer available.')
+    from app.services.lifecycle import lock_active
+    lock_active(db, current.incident_id)
     if current is None or saved is None:
         raise HTTPException(404, 'This attachment was deleted during analysis.')
     if saved.status!='processing':

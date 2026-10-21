@@ -1,4 +1,30 @@
-# Current architecture after Phase 3R
+# Current architecture after Phase 7
+
+Phase 7 extends the existing case projection and conversation pipeline. Validated
+AI readiness presents the living plan and case sheet without approving facts or
+the reporting packet. Evidence consent is persisted separately from evidence facts;
+natural case records require source text. Critical actions remain deterministic.
+
+Guest capabilities, optional email accounts and case ownership share one authorizer.
+Email challenges are browser-bound and single-use. Case recovery rotates both code
+and guest credential. Explicit resume extends inactivity without invoking AI;
+ordinary reads and polling do not. Mutations and deletion lock the active case.
+
+Migration head is `20261016_file_cleanup`. Case deletion revokes authority before
+storage cleanup; durable jobs retry original-file removal, including orphan uploads.
+An independent deletion journal and external AUTH_EPOCH protect restore workflows.
+The running application performs hourly lifecycle cleanup. See
+[Phase 7 acceptance](phase7-acceptance.md) for contracts and operator limits.
+
+The Gemini-native decision schema uses a response/interaction envelope to avoid
+repeating large reference unions across move branches. The adapter decodes this
+into the existing flat, strict NextMove contract; application grounding and safety
+validation remain authoritative. Provider transport does not grant tool authority.
+
+The sections below are historical implementation notes; current phase acceptance
+records supersede their earlier capability exclusions and model defaults.
+
+# Historical architecture after Phase 3R
 
 The primary Next.js intake accepts an arbitrary story: “Tell us what happened in
 your own words.” Money is gone remains an optional shortcut. New story-first cases

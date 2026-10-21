@@ -2,6 +2,10 @@
 import pytest
 
 OPERATIONS = [
+    ('POST','incidents/{case}/resume',None),
+    ('POST','incidents/{case}/save',None),
+    ('POST','incidents/{case}/recovery-code',None),
+    ('DELETE','incidents/{case}',{'confirmation':'DELETE'}),
     ('GET','incidents/{case}/reporting',None),
     ('POST','incidents/{case}/reporting/drafts',{'draft_id':'11111111-1111-4111-8111-111111111111','expected_revision':0}),
     ('POST','incidents/{case}/reporting/drafts/{plan}/review',{'expected_revision':0}),
@@ -62,6 +66,7 @@ def test_R3_every_private_route_has_owner_gate():
     from app.main import app
     from app.services.case_access import authorize_case_resource
     private = [r for r in app.routes if r.path.startswith("/api/v1/") and not r.path.startswith("/api/v1/health/")
+        and not r.path.startswith('/api/v1/auth/')
         and getattr(r, "dependant", None) and not (r.path == "/api/v1/incidents" and "POST" in r.methods)]
     assert len(private) == len(OPERATIONS)
     assert all(any(d.call is authorize_case_resource for d in r.dependant.dependencies) for r in private)

@@ -124,6 +124,8 @@ def preview(db,incident):
 
 
 def lock_revision(db,incident_id,revision):
+    from app.services.lifecycle import lock_active, touch
+    touch(lock_active(db, incident_id))
     claimed=db.execute(update(ConversationState).where(ConversationState.incident_id==incident_id,
         ConversationState.revision==revision).values(revision=revision))
     if claimed.rowcount!=1:raise HTTPException(409,'The case changed. Reload and review the current case.')

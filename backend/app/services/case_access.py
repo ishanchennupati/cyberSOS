@@ -16,6 +16,7 @@ from app.models.evidence import Evidence, SuspectIdentifier, TimelineEvent
 def issue(incident: Incident) -> str:
     token = secrets.token_urlsafe(32)
     incident.case_secret_hash = hashlib.sha256(token.encode()).hexdigest()
+    incident.access_epoch = get_settings().AUTH_EPOCH
     incident.case_secret_expires_at = datetime.now(timezone.utc) + timedelta(seconds=get_settings().CASE_ACCESS_TTL_SECONDS)
     return token
 
@@ -49,10 +50,13 @@ def authorize_case_resource(request: Request, response: Response, db: Session = 
     expires = incident.case_secret_expires_at if incident else None
     if expires and expires.tzinfo is None:
         expires = expires.replace(tzinfo=timezone.utc)
-    valid = bool(token and len(token) <= 256 and expected and expires and expires > datetime.now(timezone.utc))
+    from app.services.lifecycle import available
+    from app.services.return_access import account_owns
+    valid = bool(token and len(token) <= 256 and expected and expires and expires > datetime.now(timezone.utc)
+        and incident.access_epoch == get_settings().AUTH_EPOCH)
     if valid:
         valid = hmac.compare_digest(hashlib.sha256(token.encode()).hexdigest(), expected)
-    if not valid:
+    if not available(incident) or not (valid or incident and account_owns(db, request, incident.id)):
         raise HTTPException(status_code=404, detail="Private resource not available")
     origin = request.headers.get("origin")
     if request.method not in {"GET", "HEAD", "OPTIONS"} and origin and origin not in get_settings().cors_origins_list:

@@ -1,6 +1,6 @@
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, Response,Query
+from fastapi import APIRouter, Depends, HTTPException, Response, Request, Query
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
@@ -12,6 +12,8 @@ from app.schemas.incident import (
     TriageRequest,
 )
 from app.services import incident_service
+from app.core.config import get_settings
+from app.schemas.return_access import DeleteRequest
 from app.schemas.evidence import EvidenceReadinessResponse, IncidentDescriptionUpdate, GenerateSummaryResponse
 from app.services.case_access import authorize_case_resource, set_cookie
 from app.services import response_service
@@ -20,6 +22,41 @@ from app.domain.response import ActionCompletion, ActionCompletionRequest, PlanR
 from datetime import datetime, timezone
 
 router = APIRouter(prefix="/incidents", tags=["incidents"], dependencies=[Depends(authorize_case_resource)])
+
+
+@router.post('/{incident_id}/save')
+def save_case(incident_id: uuid.UUID, request: Request, db: Session = Depends(get_db)):
+    from app.models.return_access import CaseOwner
+    from app.services.return_access import session
+    from app.services.lifecycle import touch, lock_active
+    current = session(db, request, required=True, fresh=True)
+    incident = lock_active(db, incident_id)
+    owner = db.get(CaseOwner, incident_id)
+    if owner and owner.account_id != current.account_id:
+        raise HTTPException(409, 'This case is already saved to another account.')
+    if not owner:
+        db.add(CaseOwner(incident_id=incident_id, account_id=current.account_id))
+    touch(incident)
+    db.commit()
+    return {'saved': True}
+
+
+@router.post('/{incident_id}/recovery-code')
+def recovery_code(incident_id: uuid.UUID, request: Request, db: Session = Depends(get_db)):
+    from app.services.return_access import set_recovery, session
+    from app.models.return_access import CaseOwner
+    if db.get(CaseOwner, incident_id):
+        session(db, request, required=True, fresh=True)
+    return set_recovery(db, _get_incident(db, incident_id))
+
+
+@router.delete('/{incident_id}')
+def delete_case(incident_id: uuid.UUID, payload: DeleteRequest, response: Response, db: Session = Depends(get_db)):
+    from app.services.lifecycle import request_deletion
+    done = request_deletion(db, _get_incident(db, incident_id))
+    response.delete_cookie('cybersos_case_'+str(incident_id), path=get_settings().API_V1_PREFIX)
+    response.status_code = 200 if done else 202
+    return {'deleted': done, 'access_revoked': True, 'cleanup_pending': not done}
 
 from app.schemas.conversation import ConversationRead, TurnRequest
 from app.services import conversation_service
@@ -63,6 +100,15 @@ def reporting_export(incident_id:uuid.UUID,draft_id:uuid.UUID,format:str=Query('
 @router.get('/{incident_id}/conversation', response_model=ConversationRead)
 def conversation(incident_id: uuid.UUID, db: Session = Depends(get_db)):
     return conversation_service.read(db, _get_incident(db, incident_id))
+
+
+@router.post('/{incident_id}/resume', response_model=ConversationRead)
+def resume_case(incident_id: uuid.UUID, db: Session = Depends(get_db)):
+    from app.services.lifecycle import lock_active, touch
+    incident = lock_active(db, incident_id)
+    touch(incident)
+    db.commit()
+    return conversation_service.read(db, incident)
 
 
 @router.post('/{incident_id}/conversation/turns', response_model=ConversationRead)

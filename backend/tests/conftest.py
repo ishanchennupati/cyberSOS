@@ -53,6 +53,7 @@ def _migrated_database():
 def _fresh_data(_migrated_database, monkeypatch, tmp_path):
     monkeypatch.setenv("LOCAL_STORAGE_ROOT", str(tmp_path / "evidence"))
     monkeypatch.setenv("EVIDENCE_STORAGE_DIR", str(tmp_path / "evidence"))
+    monkeypatch.setenv('CASE_DELETION_JOURNAL', str(tmp_path / 'private-deletions.jsonl'))
     get_settings.cache_clear()
     with engine.begin() as connection:
         for table in reversed(Base.metadata.sorted_tables):

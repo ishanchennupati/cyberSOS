@@ -54,3 +54,16 @@ class Understanding(BaseModel):
         'help','plan','summary','conclude','witness','separate_incident','same_incident']] = Field(default_factory=list, max_length=8)
     intent_source: str | None = Field(default=None, max_length=512)
     evidence_review: NaturalEvidenceReview | None = None
+    case_records: list['NaturalCaseRecord'] = Field(default_factory=list, max_length=3)
+
+
+class NaturalCaseRecord(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    kind: Literal['note', 'reference', 'completion']
+    text: StrictStr = Field(min_length=1, max_length=500)
+    source_text: StrictStr = Field(min_length=1, max_length=1000)
+    organization: StrictStr | None = Field(default=None, max_length=100)
+    action_id: StrictStr | None = Field(default=None, max_length=64)
+
+
+Understanding.model_rebuild()

@@ -1,12 +1,13 @@
 import enum
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import DateTime, Enum, JSON, Numeric, String, Uuid, func
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
+from app.core.config import get_settings
 
 
 class CrimeCategory(str, enum.Enum):
@@ -67,6 +68,9 @@ class IncidentStatus(str, enum.Enum):
 
 class Incident(Base):
     __tablename__ = "incidents"
+    access_epoch: Mapped[str] = mapped_column(String(80), default=lambda: get_settings().AUTH_EPOCH, server_default='1')
+    retention_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc) + timedelta(days=get_settings().CASE_RETENTION_DAYS), nullable=True)
+    deleting_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4

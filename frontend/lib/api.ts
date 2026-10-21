@@ -19,6 +19,17 @@ import type {
 } from "@/types/evidence";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+export interface ReturnSession {signed_in:boolean;recently_verified:boolean;email:string|null;email_available:boolean;test_delivery_only:boolean}
+export function getReturnSession(){return request<ReturnSession>('/api/v1/auth/session',{cache:'no-store'});}
+export function requestSignIn(email:string){return request<{message:string}>('/api/v1/auth/email',{method:'POST',body:JSON.stringify({email})});}
+export function confirmSignIn(token:string){return request<{signed_in:boolean}>('/api/v1/auth/confirm',{method:'POST',body:JSON.stringify({token})});}
+export function getSavedCases(){return request<{cases:{id:string;signals:string[];updated_at:string;expires_at:string}[]}>('/api/v1/auth/cases',{cache:'no-store'});}
+export function saveCase(id:string){return request<{saved:boolean}>(`/api/v1/incidents/${id}/save`,{method:'POST'});}
+export function makeRecoveryCode(id:string){return request<{case_id:string;code:string}>(`/api/v1/incidents/${id}/recovery-code`,{method:'POST'});}
+export function recoverCase(case_id:string,code:string){return request<{case_id:string;code:string}>('/api/v1/auth/recover',{method:'POST',body:JSON.stringify({case_id,code})});}
+export function deleteCase(id:string){return request<{deleted:boolean;access_revoked:boolean;cleanup_pending:boolean}>(`/api/v1/incidents/${id}`,{method:'DELETE',body:JSON.stringify({confirmation:'DELETE'})});}
+export function signOut(){return request<{signed_in:boolean}>('/api/v1/auth/logout',{method:'POST'});}
+export function revokeSessions(){return request<{signed_in:boolean}>('/api/v1/auth/revoke-sessions',{method:'POST'});}
 import type {ReportingDraft,ReportingPreview} from '@/types/reporting';
 
 export function getReporting(id:string){return request<ReportingPreview>(`/api/v1/incidents/${id}/reporting`,{cache:'no-store',signal:AbortSignal.timeout(15000)});}
@@ -44,6 +55,8 @@ export function analyzeChatAttachment(id:string, payload:{attempt_id:string;expe
 export function getConversation(id: string) {
   return request<ConversationState>(`/api/v1/incidents/${id}/conversation`, { signal: AbortSignal.timeout(15000), cache: 'no-store' });
 }
+
+export function resumeConversation(id:string){return request<ConversationState>(`/api/v1/incidents/${id}/resume`,{method:'POST',signal:AbortSignal.timeout(15000)});}
 
 export function sendConversationTurn(id: string, payload: TurnRequest) {
   return request<ConversationState>(`/api/v1/incidents/${id}/conversation/turns`, {

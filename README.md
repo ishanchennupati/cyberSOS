@@ -6,8 +6,9 @@ police service, government service, legal-advice service or fund-recovery servic
 It cannot predict recovery, refunds, FIR eligibility or official response times.
 
 Use synthetic data for local development. Private cases now require a case capability; UUID URLs alone do not authorize
-access. Retention policy, returning-user authentication and account recovery are
-not implemented. Continue using synthetic data; this is not ready for real data.
+access. Phase 7 adds optional email sign-in, rotating case recovery codes and a
+90-day inactivity lifecycle for synthetic testing. Live Resend delivery is pending
+local credentials. This is not approved for real citizen data.
 
 ## Product journey and approved enhancements
 
@@ -22,8 +23,9 @@ contextual recommended answer buttons throughout the conversation; citizens may
 tap, type or attach evidence. Voice joins in Phase 9. No fixed questionnaire,
 required long narrative or repeated known information.
 
-The case builds quietly. With enough relevant understanding, the citizen reviews
-it and receives a personalized fuller response plan. Individually justified urgent
+The case builds quietly. With sufficient validated understanding, the AI presents
+a personalized fuller response plan and draft case sheet inline. Citizen fact
+review and reporting approval remain separate. Individually justified urgent
 actions appear earlier and compactly. AI understands and explains; backend policy
 validates critical actions against reviewed official guidance. "I lost 5000" alone
 must not establish a bank payment or trigger a generic financial checklist. Internet
@@ -36,12 +38,18 @@ or replace its form. The continuing case remains open to corrections and new evi
 
 ## Currently implemented foundations
 
+- Phase 7 continuing companion: automatic inline plan/case sheet, source-linked
+  notes and references, optional secure email return, rotating recovery codes,
+  explicit case linking, retention, deletion and retryable file cleanup. See
+  [Phase 7 implementation and acceptance](docs/phase7-acceptance.md) for verification,
+  provider limitations and the local Resend setup.
+
 - Phase 6 reporting artifact in chat: reviewed canonical packet, separate packet
   approval, fact/identifier/narrative copy, private PDF/JSON/print and verified
   external handoff. Corrections invalidate earlier approvals and exports. See
   [final acceptance and verification](docs/phase6-final-acceptance.md). Conversation
   repair passes; authenticated portal limits remain explicitly unverified.
-  Configured development PostgreSQL is migrated through `20261010_reporting`.
+  Configured development PostgreSQL is migrated through `20261016_file_cleanup`.
 
 - Phase 4 direct conversation, natural text, optional quick replies, relevant
   questions, corrections, skip/pause, persisted exchanges and source-linked case
@@ -61,9 +69,9 @@ or replace its form. The continuing case remains open to corrections and new evi
   repair; actual chat, attachment and reload requests were verified there.
 
 Evidence and limitations are in [Phase 4 acceptance](docs/phase4-acceptance.md).
-The approved three-choice hybrid entrance, improved plan applicability/presentation,
-consistent branding and assistant pending-message UI are planned Phase 5 changes,
-not capabilities already demonstrated by the current app. Existing nonfinancial
+The three-choice hybrid entrance, initial reviewed three-route coverage, evidence
+intelligence, plan applicability and assistant pending-message UI were delivered
+in Phase 5; see the phase acceptance records. Existing nonfinancial
 signals do not establish comprehensive nonfinancial safety coverage.
 
 ## Provider-dependent capability and evidence
@@ -89,7 +97,7 @@ all three entry points using one shared conversation/case system. The three labe
 do not imply support for every cybercrime. Initial reviewed nonfinancial coverage
 moves into Phase 5; Phase 8 expands it.
 
-| Phase | Planned delivery |
+| Phase | Delivery scope (see phase status for verification) |
 | --- | --- |
 | [5](docs/phases/phase-05.md) | Hybrid entrance and recommended answers throughout chat, initial three-route coverage, evidence intelligence, personalized action applicability and UI refinements |
 | [6](docs/phases/phase-06.md) | Reviewed portal-aligned complaint fields/narrative, copy/export and truthful official handoff |
@@ -99,7 +107,8 @@ moves into Phase 5; Phase 8 expands it.
 | [10–12](docs/phases/README.md) | Security/privacy acceptance, authorized deployment rehearsal, synthetic beta and gated final acceptance |
 
 Voice, full localization, authenticated portal-field coverage, comprehensive incident
-coverage, long-term recovery and production retention are not yet implemented.
+coverage and production retention approval remain future work. Synthetic secure
+return and retention are implemented in Phase 7.
 The [shared phase contracts](docs/phases/README.md) govern future execution;
 [AGENTS.md](AGENTS.md) defines permanent product/engineering rules. Older
 [roadmap records](docs/roadmap.md) are historical where they conflict with these
@@ -268,7 +277,10 @@ and set CASE_COOKIE_SECURE=false only for local HTTP. Requests include cookies;
 never copy a case secret into a URL, query, localStorage or a log. API clients may
 use X-Case-Secret in a header. Capabilities expire after seven days by default.
 Missing, expired and cross-case credentials receive 404 on every private resource,
-including original evidence. Clearing cookies loses local access.
+including original evidence. Clearing cookies removes guest access; return requires
+a previously linked email account or saved case reference and current recovery code.
+Neither the UUID nor a bookmark bypasses ownership. See the Phase 7 acceptance
+record for retention, revocation and backup/restore procedures.
 
 The additive Phase 1 migration preserves old incidents/evidence, marks historical
 cases legacy_unversioned and leaves their capability unset. Those cases stay locked;

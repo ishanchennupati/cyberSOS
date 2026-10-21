@@ -1,6 +1,6 @@
 """One bounded conversational proposal; deliberately has no action-plan field."""
 from typing import Literal
-from pydantic import BaseModel, ConfigDict, Field, StrictStr, model_validator
+from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictStr, model_validator
 from app.schemas.understanding import CandidateField
 
 
@@ -30,6 +30,10 @@ class NextMove(BaseModel):
     action_id: StrictStr | None = Field(max_length=64)
     # Short checkable context references, never private chain-of-thought.
     basis: list[Literal['current_facts', 'unknown_fact', 'conflict', 'candidate', 'recent_message', 'approved_action', 'evidence']] = Field(min_length=1, max_length=7)
+    # Keep the discriminator before optional metadata in the native grammar.
+    companion_ready: StrictBool = False
+    offers_evidence: StrictBool = False
+    material_follow_up: Literal['safety', 'actions', 'reporting', 'conflict', 'new_information'] | None = None
 
     @model_validator(mode='after')
     def shape(self):

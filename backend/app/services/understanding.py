@@ -41,9 +41,13 @@ def resolve_time(phrase: str, timestamp: datetime, zone: str) -> ApproximateTime
         point = local - delta
         margin = timedelta(minutes=1 if match[2].startswith('minute') else 15)
         start, end = point - margin, min(point + margin, local)
-    elif phrase_lower in {'yesterday evening', 'this morning', 'last night'}:
+    elif phrase_lower in {'today', 'yesterday', 'yesterday evening', 'this morning', 'last night'}:
         day = local.replace(hour=0, minute=0, second=0, microsecond=0)
-        if phrase_lower == 'this morning':
+        if phrase_lower == 'today':
+            start, end = day, local
+        elif phrase_lower == 'yesterday':
+            start, end = day - timedelta(days=1), day
+        elif phrase_lower == 'this morning':
             start, end = day + timedelta(hours=5), min(day + timedelta(hours=12), local)
         elif phrase_lower == 'yesterday evening':
             start, end = day - timedelta(hours=6), day - timedelta(hours=2)
@@ -120,7 +124,7 @@ def interpret(message, facts, turn_id, timestamp, zone, pending_question=None, r
             raise MoveRejected('INTENT_SOURCE_MISMATCH')
         if set(parsed.intents) & {'unrelated','feedback','witness','separate_incident'} or (
                 context_data['incident_scope_pending'] and 'same_incident' not in parsed.intents):
-            parsed = parsed.model_copy(update={'candidates':[], 'evidence_review':None})
+            parsed = parsed.model_copy(update={'candidates':[], 'evidence_review':None, 'case_records':[]})
         check_values(parsed.model_dump(mode='json'))
     except Exception as exc:
         # Provider errors may include user input/key; never log or expose them.
@@ -316,4 +320,7 @@ def interpret(message, facts, turn_id, timestamp, zone, pending_question=None, r
         'provider_initialized': True, 'invocation_succeeded': True, 'parsing_succeeded': True,
         'message': 'Working understanding from your words. You can review or correct it.',
         'candidates': reviewed, 'conflicts': conflicts, 'resolved_reviews': resolved_reviews,
-        'intents':parsed.intents, 'intent_source':parsed.intent_source, 'evidence_review':natural_review}
+        'intents':parsed.intents, 'intent_source':parsed.intent_source, 'evidence_review':natural_review,
+        'case_records':[{**r.model_dump(mode='json'),
+            'organization':r.organization if r.organization and r.organization.casefold() in r.source_text.casefold() else None}
+            for r in parsed.case_records if r.source_text in message and r.text in r.source_text]}

@@ -1,4 +1,6 @@
 from fastapi import FastAPI
+import asyncio
+from contextlib import asynccontextmanager, suppress
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
@@ -14,7 +16,20 @@ log_event('runtime_configuration', provider=settings.UNDERSTANDING_PROVIDER,
           key_configured=bool(settings.GEMINI_API_KEY), timeout_seconds=settings.UNDERSTANDING_TIMEOUT_SECONDS,
           retries=settings.UNDERSTANDING_RETRIES)
 
+@asynccontextmanager
+async def lifespan(_app):
+    from app.services.lifecycle import periodic_cleanup
+    cleanup_task = asyncio.create_task(periodic_cleanup())
+    try:
+        yield
+    finally:
+        cleanup_task.cancel()
+        with suppress(asyncio.CancelledError):
+            await cleanup_task
+
+
 app = FastAPI(
+    lifespan=lifespan,
     title="CyberSOS API",
     description="Citizen-support layer for responding to cyber/financial fraud incidents.",
     version="0.1.0",

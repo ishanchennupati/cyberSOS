@@ -122,7 +122,12 @@ def create_evidence(
     storage_path = storage_service.build_storage_path(incident.id, uuid.uuid4(), filename)
 
     backend = storage_service.get_storage_backend()
-    backend.upload(storage_path, file_bytes, mime_type)
+    try:
+        backend.upload(storage_path, file_bytes, mime_type)
+    except Exception:
+        from app.services.lifecycle import remove_uncommitted_file
+        remove_uncommitted_file(db, backend, storage_path)
+        raise
 
     evidence = Evidence(
         id=evidence_id,
@@ -141,10 +146,13 @@ def create_evidence(
     )
     db.add(evidence)
     try:
+        from app.services.lifecycle import lock_active, touch
+        incident = lock_active(db, incident.id)
+        touch(incident)
         db.commit()
     except Exception as exc:
-        db.rollback()
-        backend.delete(storage_path)
+        from app.services.lifecycle import remove_uncommitted_file
+        remove_uncommitted_file(db, backend, storage_path)
         from sqlalchemy.exc import IntegrityError
         if isinstance(exc, IntegrityError):
             existing = db.get(Evidence, evidence_id)

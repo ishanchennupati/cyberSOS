@@ -35,6 +35,7 @@ export default function HomePage() {
       <header className="border-b border-line bg-surface">
         <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-4">
           <Brand />
+          <Link href="/return" className="min-h-11 px-2 py-3 text-sm underline">Return to your case</Link>
           <span className="hidden sm:block font-mono text-xs uppercase tracking-widest text-ink-muted">
             Cyber incident support prototype
           </span>

@@ -357,14 +357,14 @@ def test_provider_question_grammar_excludes_answered_verification_but_allows_con
     context = {'unknown_fields': ['ongoing_loss', 'remote_access'], 'answered_fields': ['ongoing_loss', 'amount'],
         'candidates': [{'field': 'ongoing_loss', 'status': 'needs_review'},
                        {'field': 'payment_app', 'status': 'needs_review'}], 'conflicts': ['amount']}
-    variants = provider_schema(NextMove, context=context)['anyOf']
+    variants = provider_schema(NextMove, context=context)['properties']['interaction']['anyOf']
     by_type = {kind: variant for variant in variants for kind in variant['properties']['type']['enum']}
     assert by_type['ASK_CLARIFICATION']['properties']['related_field']['enum'] == ['remote_access']
     assert by_type['VERIFY_INFORMATION']['properties']['related_field']['enum'] == ['payment_app']
     assert by_type['RESOLVE_CONFLICT']['properties']['related_field']['enum'] == ['amount']
     assert 'REQUEST_EVIDENCE' in by_type and 'ACKNOWLEDGE_AND_WAIT' in by_type
     context['candidates'] = [{'field': 'ongoing_loss', 'status': 'needs_review'}]
-    variants = provider_schema(NextMove, context=context)['anyOf']
+    variants = provider_schema(NextMove, context=context)['properties']['interaction']['anyOf']
     assert not any('VERIFY_INFORMATION' in v['properties']['type']['enum'] for v in variants)
 
 

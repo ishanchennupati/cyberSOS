@@ -4,6 +4,8 @@ export type FactField = 'authorization' | 'ongoing_loss' | 'remote_access' | 'ac
 export type ReplyValue = string | boolean | null;
 export interface Question { field: FactField | null; priority: 'CRITICAL' | 'SUPPORTING' | 'REPORTING' | 'OPTIONAL'; question: string }
 export interface NextMove {
+  companion_ready?: boolean;
+  material_follow_up?: 'safety'|'actions'|'reporting'|'conflict'|'new_information'|null;
   type: 'ASK_CLARIFICATION' | 'REQUEST_EVIDENCE' | 'VERIFY_INFORMATION' | 'RESOLVE_CONFLICT' | 'ACKNOWLEDGE_AND_WAIT' | 'EXPLAIN_APPROVED_ACTION' | 'CONTINUE_OPEN_CONVERSATION' | 'ANSWER_RELEVANT_QUESTION';
   purpose: 'containment' | 'understanding' | 'preservation' | 'reporting' | 'conflict' | 'support';
   message: string; related_field: string | null; quick_replies: string[];
@@ -15,7 +17,8 @@ export interface NextMove {
 export interface TurnRequest {
   turn_id: string;
   expected_revision: number;
-  type: 'shortcut' | 'answer' | 'correction' | 'completion' | 'message' | 'evidence_review' | 'route_hint' | 'case_review';
+  type: 'shortcut' | 'answer' | 'correction' | 'completion' | 'message' | 'evidence_review' | 'route_hint' | 'case_review' | 'case_update';
+  case_update?: {kind:'note'|'reference';text:string;organization?:string|null};
   field?: FactField | null;
   value?: ReplyValue;
   text?: string;
@@ -71,6 +74,7 @@ export interface ConversationTurn {
     conversation_control?: {request:string; questions_paused:boolean; incident_scope_pending:boolean};
     help_view?: {known_facts:Record<string,{value:unknown}>; unknowns:string[]; action_ids:string[]; meaning:string};
     review_prompt?: boolean;
+    completion_proposals?: {text:string;source_text:string;action_id?:string|null}[];
     next_move?: NextMove | null; agent?: { status: 'decided' | 'fallback' | 'not_requested'; reason: string | null;
       category?: 'PROVIDER_UNAVAILABLE' | 'PROVIDER_5XX' | 'PROVIDER_QUOTA' | 'PROVIDER_AUTH' | 'PROVIDER_MODEL_UNAVAILABLE' | 'TIMEOUT' | 'MALFORMED_OUTPUT' | 'VALIDATION_REJECTED' | 'APPLICATION_ERROR' | null;
       invocation_succeeded?: boolean; parsing_succeeded?: boolean; validation_succeeded?: boolean;
@@ -92,6 +96,11 @@ export interface ConversationState {
   } };
   completions: Completion[];
   projection: { reference: string; revision: number; plan_revision: number; status: string;
+    companion?: {presented:boolean;presented_revision:number|null;evidence_offer:'offered'|'accepted'|'declined'|null};
+    records?: {kind:'note'|'reference';text:string;organization?:string|null;meaning:string;source_turn:string;created_at:string}[];
+    lifecycle?: {expires_at:string;retention_days:number};
+    evidence?: {id:string;name:string;analysis:string;verification:string}[];
+    timeline?: {id:string;time:string;description:string;meaning:string}[];
     working_understanding: string[]; known_facts: Record<string, {value: unknown; source_turn: string | null; origin: string; verified: boolean; evidence_id?:string|null; source_deleted?:boolean}>;
     evidence_count: number; completed_actions: number; completion_meaning: string;
     current_help?: {known_facts:Record<string,{value:unknown}>; unknowns:string[]; action_ids:string[]; meaning:string} };

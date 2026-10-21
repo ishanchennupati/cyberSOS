@@ -425,6 +425,19 @@ def validate_move(move, context):
     # An explanation is prose about a reviewed action. Procedures stay in the
     # independently rendered policy card and cannot be expanded in model prose.
     grounded_text(text, context)
+    companion = context.get('case_state', {}).get('companion', {})
+    asks = '?' in text or move.type in {'ASK_CLARIFICATION', 'VERIFY_INFORMATION', 'RESOLVE_CONFLICT', 'REQUEST_EVIDENCE', 'CONTINUE_OPEN_CONVERSATION'}
+    if asks and companion.get('presented'):
+        material = move.material_follow_up
+        relevant = (material == 'conflict' and field in context['conflicts'] or
+            material == 'new_information' and context.get('facts_changed') or
+            material == 'safety' and field in {'immediate_danger','ongoing_loss','account_compromised','remote_access'} and field in context['unknown_fields'] or
+            material in {'actions','reporting'} and field in context['unknown_fields'])
+        if not relevant or move.purpose not in {'containment','reporting','conflict'} or len(text.split('. ')) < 2:
+            reject('ROUTINE_QUESTION_AFTER_COMPANION')
+    from app.services.companion import has_case_context
+    if move.companion_ready and (not has_case_context(facts) or context['conflicts'] or asks):
+        reject('UNSUPPORTED_COMPANION_READINESS')
     previous = context.get('current_move') or {}
     review_offered = context.get('case_state', {}).get('review_offered', False)
     if move.type == 'ACKNOWLEDGE_AND_WAIT' and (previous.get('type') == 'ACKNOWLEDGE_AND_WAIT' or review_offered) and not context.get('facts_changed', False):
@@ -483,7 +496,7 @@ def validate_move(move, context):
             reject('EVIDENCE_DECLINED_OR_DEFERRED')
         if context['evidence'] or facts['evidence_available'] is False:
             reject('EVIDENCE_PRESENT_OR_UNAVAILABLE')
-        if not (facts['money_lost'] or facts['evidence_mentioned'] or facts['identifiers'] or set(facts['signals']) & {'threats','harassment','impersonation'}):
+        if not (facts['money_lost'] or facts['evidence_mentioned'] or facts['identifiers'] or set(facts['signals']) & {'threats','harassment','impersonation','account_takeover'}):
             reject('EVIDENCE_NOT_RELEVANT')
         if not context.get('capabilities', {}).get('ai_evidence_extraction') and re.search(r'\b(?:extract|ocr|analyse|analyze|identify)\b', text, re.I):
             reject('UNAVAILABLE_EVIDENCE_CAPABILITY')

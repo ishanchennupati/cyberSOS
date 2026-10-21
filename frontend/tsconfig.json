@@ -39,7 +39,8 @@
     ".next-phase6/types/**/*.ts",
     ".next-phase6-final/types/**/*.ts",
     ".next-phase6-finish/types/**/*.ts",
-    ".next-phase6-manual/types/**/*.ts"
+    ".next-phase6-manual/types/**/*.ts",
+    ".next-phase7/types/**/*.ts"
   ],
   "exclude": [
     "node_modules",

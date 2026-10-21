@@ -246,7 +246,7 @@ def test_provider_grammar_cannot_choose_declined_open_story():
     facts=FACTS_ADAPTER.validate_python({'kind':'incident_understanding','signals':['harassment'],'platform':'Instagram'})
     context=case_agent.build_context(facts,{},[],[],'Skip that question.',evaluate(facts,as_of=datetime.now(timezone.utc)),[],['story'])
     schema=provider_schema(NextMove,context)
-    kinds={kind for variant in schema['anyOf'] for kind in variant['properties']['type']['enum']}
+    kinds={kind for variant in schema['properties']['interaction']['anyOf'] for kind in variant['properties']['type']['enum']}
     assert 'CONTINUE_OPEN_CONVERSATION' not in kinds
     assert 'ASK_CLARIFICATION' in kinds and 'ACKNOWLEDGE_AND_WAIT' in kinds
 
@@ -312,7 +312,7 @@ def test_generation_schema_obeys_every_move_shape():
     facts=FACTS_ADAPTER.validate_python({'kind':'incident_understanding','signals':['account_takeover'],'platform':'Google','account_compromised':True})
     context=case_agent.build_context(facts,{},[],[],'Why are you asking that?',evaluate(facts,as_of=datetime.now(timezone.utc)),[],[])
     schema=provider_schema(NextMove,context)
-    for variant in schema['anyOf']:
+    for variant in schema['properties']['interaction']['anyOf']:
         props=variant['properties']
         assert len(props['type']['enum'])==1
         kind=props['type']['enum'][0]
@@ -397,7 +397,7 @@ def test_adequate_story_cannot_receive_generic_repeat_request(client, monkeypatc
     assert context['case_state']['story_established'] is True
     from app.schemas.next_move import NextMove
     from app.services.ai_provider import provider_schema
-    assert all(v['properties']['type']['enum']!=['CONTINUE_OPEN_CONVERSATION'] for v in provider_schema(NextMove,context)['anyOf'])
+    assert all(v['properties']['type']['enum']!=['CONTINUE_OPEN_CONVERSATION'] for v in provider_schema(NextMove,context)['properties']['interaction']['anyOf'])
 
 
 @pytest.mark.parametrize('text', [

@@ -8,11 +8,19 @@ from app.schemas.next_move import NextMove
 from app.schemas.evidence_intelligence import EvidenceReview
 
 
+class CaseUpdate(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    kind: Literal['note', 'reference']
+    text: StrictStr = Field(min_length=1, max_length=500)
+    organization: StrictStr | None = Field(default=None, max_length=100)
+
+
 class TurnRequest(BaseModel):
     model_config = ConfigDict(extra='forbid')
     turn_id: UUID  # Also the idempotency key; retained across retries.
     expected_revision: int = Field(ge=0)
-    type: Literal['shortcut', 'answer', 'correction', 'completion', 'message', 'evidence_review', 'route_hint', 'case_review'] = 'answer'
+    type: Literal['shortcut', 'answer', 'correction', 'completion', 'message', 'evidence_review', 'route_hint', 'case_review', 'case_update'] = 'answer'
+    case_update: CaseUpdate | None = None
     field: FactField | None = None
     value: StrictBool | StrictStr | None = None
     action_id: str | None = Field(default=None, max_length=64)
@@ -41,6 +49,10 @@ class TurnRequest(BaseModel):
             raise ValueError('Text is only supported for message turns')
         if (self.type == 'evidence_review') != (self.evidence_review is not None):
             raise ValueError('Evidence review requires an explicit bounded selection')
+        if (self.type == 'case_update') != (self.case_update is not None):
+            raise ValueError('Case record requires explicit content')
+        if self.case_update:
+            check_values(self.case_update.model_dump())
         if (self.type == 'route_hint') != (self.route_hint is not None):
             raise ValueError('Routing hints are separate from facts')
         if self.review_context_id is not None and self.type != 'message':
@@ -53,7 +65,7 @@ class TurnRead(BaseModel):
     id: UUID
     incident_id: UUID
     role: Literal['user']
-    type: Literal['shortcut', 'answer', 'correction', 'completion', 'message', 'evidence_review', 'route_hint', 'case_review']
+    type: Literal['shortcut', 'answer', 'correction', 'completion', 'message', 'evidence_review', 'route_hint', 'case_review', 'case_update']
     text: str
     structured_reply: TurnRequest
     fact_changes: dict

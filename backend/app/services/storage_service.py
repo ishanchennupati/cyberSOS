@@ -100,17 +100,17 @@ class SupabaseStorageBackend(StorageBackend):
     def delete(self, path: str) -> None:
         url = f"{self.base_url}/storage/v1/object/{self.bucket}"
         try:
-            httpx.request(
+            result = httpx.request(
                 "DELETE",
                 url,
                 json={"prefixes": [path]},
                 headers=self._headers,
                 timeout=30.0,
             )
-        except httpx.HTTPError:
-            # Deletion is best-effort; the DB row is still removed by the
-            # caller so the evidence disappears from the app either way.
-            pass
+        except httpx.HTTPError as exc:
+            raise StorageError('Storage deletion is unavailable. Please retry.') from exc
+        if result.status_code >= 400 and result.status_code != 404:
+            raise StorageError('Storage deletion is unavailable. Please retry.')
 
     def signed_url(self, path: str, expires_in: int = 3600) -> str | None:
         url = f"{self.base_url}/storage/v1/object/sign/{self.bucket}/{path}"

@@ -9,7 +9,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
-from pydantic import Field
+from pydantic import Field, field_validator
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -51,6 +51,22 @@ class Settings(BaseSettings):
     UNDERSTANDING_MAX_OUTPUT_TOKENS: int = Field(default=4096, ge=256, le=8192)
     CASE_COOKIE_SECURE: bool = True
     CASE_ACCESS_TTL_SECONDS: int = Field(default=604800, ge=600, le=2592000)
+    AUTH_EPOCH: str = Field(default='1', min_length=1, max_length=80)
+    PUBLIC_APP_URL: str = 'http://localhost:3000'
+    CASE_RETENTION_DAYS: int = Field(default=90, ge=1, le=365)
+    CASE_CLEANUP_INTERVAL_SECONDS: int = Field(default=3600, ge=60, le=86400)
+    CASE_DELETION_JOURNAL: str = str(Path(__file__).resolve().parents[2] / 'tmp' / 'private' / 'deletions.jsonl')
+    EMAIL_PROVIDER: Literal['disabled', 'resend'] = 'disabled'
+    RESEND_API_KEY: str | None = None
+    RESEND_FROM_EMAIL: str = 'CyberSOS <onboarding@resend.dev>'
+    RESEND_TEST_RECIPIENT: str | None = None
+    RESEND_VERIFIED_DOMAIN: bool = False
+
+    @field_validator('CASE_DELETION_JOURNAL')
+    @classmethod
+    def stable_deletion_journal(cls, value):
+        path = Path(value)
+        return str(path if path.is_absolute() else Path(__file__).resolve().parents[2] / path)
 
     @property
     def supabase_configured(self) -> bool:

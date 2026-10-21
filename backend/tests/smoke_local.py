@@ -57,6 +57,7 @@ def main():
         env = {**os.environ,
                "DATABASE_URL": "sqlite:///" + (Path(directory) / "smoke.sqlite").as_posix(),
                "LOCAL_STORAGE_ROOT": str(Path(directory) / "evidence"),
+               "CASE_DELETION_JOURNAL": str(Path(directory) / 'private-deletions.jsonl'),
                "CORS_ORIGINS": f"http://localhost:{frontend_port}",
                "CASE_COOKIE_SECURE": "false",
                "SUPABASE_URL": "", "SUPABASE_SERVICE_ROLE_KEY": "",

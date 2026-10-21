@@ -1,5 +1,18 @@
 # Current roadmap and scope
 
+## Phase 7 architecture handoff ? 2026-10-16
+
+REQUIRED CHANGE: later operational/security/deployment prompts must account for
+optional email identity and case ownership, rotating case recovery, the separate
+durable deletion journal and AUTH_EPOCH rotation before restored databases serve
+requests. The running app performs hourly lifecycle cleanup; manual restore cleanup
+uses `python -m app.services.lifecycle`. Offline periods delay physical cleanup,
+while access checks still reject expired/deleting cases when the app resumes.
+
+Later phases reuse the canonical case projection and reviewed reporting packet.
+Phase 8 coverage and Phase 9 voice remain unimplemented. No core product invariant
+changes are required. See [Phase 7 acceptance](phase7-acceptance.md).
+
 ## Revised future Phase 4–12 contracts — 2026-10-02
 
 The agreed requirements and supplied phase prompts are consolidated in

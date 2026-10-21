@@ -1,5 +1,17 @@
 # Phase status
 
+## Phase 7 ? implemented; final acceptance recorded separately
+
+The companion, optional secure return and synthetic 90-day lifecycle are implemented.
+Configured PostgreSQL is migrated through `20261016_file_cleanup`. Live Resend
+email delivery awaits local credentials; email browser tests use captured test mail.
+Three-route live presentation/recovery passed; strict fresh replies after recovery
+remain partially accepted because Gemini returned repeated high-demand HTTP 503.
+See [Phase 7 implementation and verification](phase7-acceptance.md) for exact
+results, live AI limitations and the manual journey. Phase 8 has not started.
+
+Earlier entries below describe the repository at their recorded dates.
+
 ## Phase 6 manual-test repair — completed 2026-10-11
 
 The reported recap/question/composer defects are repaired within the declared

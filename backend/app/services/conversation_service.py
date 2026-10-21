@@ -1,6 +1,7 @@
 """Progression and durable turns only. Safety actions belong to Phase 1."""
 from datetime import datetime, timezone
 from time import perf_counter
+from app.core.config import get_settings
 from app.core.diagnostics import log_ai_stage
 from fastapi import HTTPException
 from sqlalchemy import select, update
@@ -59,6 +60,9 @@ def question(facts, answered, conflicts=()):
 
 
 def read(db, incident):
+    from app.services.lifecycle import available
+    if not available(incident):
+        raise HTTPException(404, 'Private resource not available')
     if incident.facts is None:
         raise HTTPException(409, 'This legacy case does not have canonical conversation facts yet.')
     state = db.get(ConversationState, incident.id)
@@ -108,11 +112,20 @@ def read(db, incident):
     facts = FACTS_ADAPTER.validate_python(plan.plan['facts'])
     memory = derive_memory(facts, turns, turns[-1].fact_changes.get('conflicts', []) if turns else [])
     completions = response_service.completions(db, incident.id)
-    projection = {'reference': str(incident.id), 'revision': state.revision, 'plan_revision': plan.revision,
+    from app.services.companion import state as companion_state
+    projection = {'companion': companion_state(turns), 'reference': str(incident.id), 'revision': state.revision, 'plan_revision': plan.revision,
         'status': 'In progress' if turns else 'Draft', 'working_understanding': facts.signals,
         'known_facts': memory['facts'], 'evidence_count': len(evidence),
         'completed_actions': sum(item.completed for item in completions),
         'completion_meaning': 'Recorded by you'}
+    projection['records'] = [dict(record, source_turn=str(turn.id), created_at=turn.created_at.isoformat(), meaning='Recorded by you')
+        for turn in turns for record in turn.fact_changes.get('case_records', [])]
+    projection['lifecycle'] = {'expires_at': incident.retention_expires_at.isoformat(), 'retention_days': get_settings().CASE_RETENTION_DAYS}
+    projection['evidence'] = [{'id': str(row.id), 'name': row.original_filename, 'analysis': row.extraction_status.value,
+        'verification': row.verification_status.value} for row in evidence]
+    from app.models.evidence import TimelineEvent
+    projection['timeline'] = [{'id': str(row.id), 'time': row.event_time.isoformat(), 'description': row.description,
+        'meaning': 'Recorded by you'} for row in db.scalars(select(TimelineEvent).where(TimelineEvent.incident_id == incident.id).order_by(TimelineEvent.event_time))]
     if any(turn.fact_changes.get('help_view') for turn in turns):
         from app.services.conversation_control import help_view
         projection['current_help'] = help_view(facts, current_policy, memory['open_issues'])
@@ -121,7 +134,7 @@ def read(db, incident):
     reviewed = next((t for t in reversed(turns) if t.type == 'case_review'), None)
     reviewed_facts = reviewed.fact_changes.get('reviewed_facts') if reviewed else None
     current_facts = facts.model_dump(mode='json', exclude={'provenance', 'detected_language'})
-    sufficient = bool(facts.signals)
+    sufficient = bool(facts.signals) or projection['companion']['presented']
     review_state = {'available': sufficient, 'reviewed': reviewed_facts == current_facts,
         'has_reviewed':reviewed is not None,'summary': memory['facts']}
     return ConversationRead(incident_id=incident.id, revision=state.revision, version=state.version,
@@ -158,7 +171,10 @@ def submit(db, incident, payload):
     conflicts = snapshot.turns[-1].fact_changes.get('conflicts', []) if snapshot.turns else []
     review_to_record = None
     review_attempt = None
-    if payload.type == 'evidence_review':
+    if payload.type == 'case_update':
+        changes = {'case_records': [payload.case_update.model_dump(mode='json')]}
+        text = ('Reference: ' if payload.case_update.kind == 'reference' else 'Note: ') + payload.case_update.text
+    elif payload.type == 'evidence_review':
         from app.services.evidence_intelligence import merge_review
         review_to_record = payload.evidence_review
         facts, updates, review_attempt = merge_review(db, incident.id, facts, review_to_record, payload.turn_id)
@@ -179,6 +195,8 @@ def submit(db, incident, payload):
         text = 'I reviewed the current understanding. Show my response plan.'
     elif payload.type == 'message':
         text = payload.text or ''
+        from app.services.companion import consent
+        evidence_consent = consent(snapshot, text)
         active_review = None
         remaining = [r for r in snapshot.evidence_reviews if r['status'] == 'review_needed' and any(not c['reviewed'] for c in r['candidates'])]
         if payload.review_context_id:
@@ -191,13 +209,17 @@ def submit(db, incident, payload):
         facts, updates, result = understanding.interpret(text, facts, payload.turn_id, timestamp, payload.timezone,
             (snapshot.next_move.model_dump(mode='json') if snapshot.next_move else
                 snapshot.pending_question.model_dump(mode='json') if snapshot.pending_question else None),
-            recent_turns=snapshot.turns, review_context=active_review) if text.strip() else (facts, [], {'status':'understood', 'candidates':[], 'conflicts':[], 'attachment_only':True})
+            recent_turns=snapshot.turns, review_context=active_review) if text.strip() and not evidence_consent else (facts, [], {'status':'understood', 'candidates':[], 'conflicts':[], 'attachment_only':not bool(text.strip())})
         log_ai_stage('extraction', result, (perf_counter() - stage_started) * 1000)
         from app.services.conversation_control import explicit_controls
         result['intents'] = sorted(set(result.get('intents', [])) | explicit_controls(text))
         resolved = {u['field'] for u in updates}
         conflicts = list(dict.fromkeys([f for f in conflicts if f not in resolved] + result['conflicts']))
         changes = {'updates': updates, 'understanding': result}
+        changes['case_records'] = [r for r in result.get('case_records', []) if r['kind'] in {'note','reference'}]
+        changes['completion_proposals'] = [r for r in result.get('case_records', []) if r['kind'] == 'completion']
+        if evidence_consent:
+            changes['evidence_offer'] = evidence_consent
         if result.get('evidence_review'):
             from app.services.evidence_intelligence import merge_review
             from app.schemas.evidence_intelligence import EvidenceReview
@@ -285,10 +307,11 @@ def submit(db, incident, payload):
         text = ('Completed: ' if payload.value else 'Reopened: ') + payload.action_id
     # Facts and deterministic actions exist BEFORE AI chooses any conversational move.
     # No provider calls on read/replay, and no model-generated action enters the plan.
-    if payload.type in {'completion', 'route_hint', 'case_review'}:
-        pending = snapshot.pending_question.model_dump(mode='json') if snapshot.pending_question else None
-        changes['next_move'] = snapshot.next_move.model_dump(mode='json') if snapshot.next_move else None
+    if payload.type in {'completion', 'route_hint', 'case_review', 'case_update'}:
+        pending = None
+        changes['next_move'] = None
         changes['acknowledgement'] = {'completion':'Your action update is saved.',
+            'case_update':'Saved in your case, recorded by you. No external status has been verified.',
             'route_hint':'You can change this starting choice or describe what happened in your own words. It does not classify your case.',
             'case_review':'Your current understanding is reviewed. Your response plan is available; you can keep talking and correct anything.'}[payload.type]
         if payload.type in {'route_hint', 'case_review'}:
@@ -336,6 +359,10 @@ def submit(db, incident, payload):
         if changes.get('answered_unknown'):
             declined.add(changes['answered_unknown'])
         if declined & {'occurred_at','time_window'}: declined.update({'occurred_at','time_window'})
+        from app.services.companion import state as companion_state
+        companion = companion_state(snapshot.turns)
+        if companion['evidence_offer'] in {'accepted', 'declined'} or changes.get('evidence_offer'):
+            declined.add('evidence_available')
         question_history = dispositions(facts, snapshot.turns)
         if changes.get('question_disposition'):
             item=changes['question_disposition']
@@ -347,7 +374,7 @@ def submit(db, incident, payload):
         if changes.get('field'):
             unresolved = [c for c in unresolved if c['field'] != changes['field']]
         changes['unresolved_candidates'] = unresolved
-        if current_control['request'] in {'help','plan','summary','conclude','pause','witness','separate_incident'}:
+        if changes.get('evidence_offer') or current_control['request'] in {'help','plan','summary','conclude','pause','witness','separate_incident'}:
             # Citizen control and exact approved help need no additional model
             # proposal. Understanding still owns multilingual intent and facts.
             move, agent = None, {'status':'not_requested', 'reason':'citizen_control',
@@ -366,6 +393,7 @@ def submit(db, incident, payload):
             context['facts_changed'] = bool(changes.get('updates', []))
             context['case_state']['review_offered'] = bool(snapshot.turns and snapshot.turns[-1].fact_changes.get('review_prompt'))
             context['route_hint'] = snapshot.route_hint
+            context['case_state']['companion'] = companion
             context['memory']['questions_paused'] = current_control['questions_paused']
             # Preserve equivalent-topic suppression assembled by the agent
             # context (e.g. exact, approximate and textual incident timing).
@@ -384,6 +412,8 @@ def submit(db, incident, payload):
         paused = current_control['questions_paused']
         request = current_control['request']
         pending = None if move or paused or request != 'investigate' else question(facts, fallback_answered, conflicts)
+        if companion['presented']:
+            pending = None
         if pending and pending['field'] is None and 'story' in decision_answered and not conflicts:
             pending = None
         changes['next_move'] = move.model_dump(mode='json') if move else None
@@ -399,7 +429,7 @@ def submit(db, incident, payload):
             acknowledgement = 'Your message is saved. Questions remain paused. You can ask to continue whenever you are ready.'
         if agent.get('rejection_reason') == 'REPEATED_CASE_RECAP' and facts.signals and not conflicts and not paused:
             pending = None
-            acknowledgement = 'Your case details are saved. Review what I understood below; you can confirm it to see your response plan, or correct anything in chat.'
+            acknowledgement = 'Your case details are saved. You can review the current understanding below or correct anything in chat.'
             changes['review_prompt'] = True
         elif move and move.type == 'ACKNOWLEDGE_AND_WAIT' and facts.signals and not conflicts and not paused:
             changes['review_prompt'] = True
@@ -417,6 +447,21 @@ def submit(db, incident, payload):
                 acknowledgement = 'This separate incident has not been merged into the original case. Start a separate case to continue with those details, or clarify that you are returning to the original incident. No immediate danger has been inferred.'
         elif move is None and request in {'question','feedback'}:
             acknowledgement = 'I cannot reliably answer that question right now. Questions should help with safety, current actions or reporting; you can leave a detail unknown and ask for your current help or summary.'
+        from app.services.companion import has_case_context
+        if move and move.companion_ready and has_case_context(facts) and not conflicts and not current_control['incident_scope_pending']:
+            changes['companion_presented'] = True
+            changes['help_view'] = help_view(facts, plan, conflicts)
+            pending = None
+        if move and (move.type == 'REQUEST_EVIDENCE' or move.offers_evidence):
+            changes['evidence_offer'] = 'offered'
+        if changes.get('evidence_offer') in {'accepted', 'declined'}:
+            pending = None
+            changes['next_move'] = None
+            acknowledgement = ('You can attach a safe JPG, PNG or PDF using +, or describe the record here. '
+                'Please leave out passwords, OTPs, identity documents and explicit images. Uploading is optional.'
+                if changes['evidence_offer'] == 'accepted' else 'That is fine. Uploading is optional; you can keep talking or return later.')
+        if companion['presented'] and move is None and result.get('status') != 'fallback' and request == 'investigate' and not changes.get('evidence_offer'):
+            acknowledgement = 'Your update is saved. Your current plan and case sheet remain available below; you can keep talking.'
         changes['acknowledgement'] = acknowledgement
     changes['conflicts'] = conflicts
     from app.services.case_memory import derive_memory
@@ -429,12 +474,15 @@ def submit(db, incident, payload):
     try:
         # Atomic compare-and-swap protects SQLite and PostgreSQL alike. All writes
         # including plan and completion are in the same transaction as this claim.
+        from app.services.lifecycle import lock_active, touch
+        incident = lock_active(db, incident.id)
         result = db.execute(update(ConversationState).where(ConversationState.incident_id == incident.id,
             ConversationState.revision == payload.expected_revision).values(revision=payload.expected_revision + 1,
             answered=[f.value for f in answered], pending_question=pending))
         if result.rowcount != 1:
             db.rollback()
             raise HTTPException(409, 'Conversation changed. Reload before sending.')
+        touch(incident)
         if payload.type in {'answer', 'correction', 'message', 'shortcut', 'evidence_review'}:
             response_service.record_plan(db, incident, facts, as_of=timestamp)
         elif payload.type == 'completion':

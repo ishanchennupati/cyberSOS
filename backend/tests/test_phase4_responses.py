@@ -55,9 +55,9 @@ def test_provider_schema_keeps_reference_definitions_at_root():
     schema = provider_schema(NextMove, context())
     assert 'FactReference' in schema['$defs']
     assert 'KnowledgeReference' in schema['$defs']
-    waiting=next(variant for variant in schema['anyOf'] if variant['properties']['type'].get('enum')==['ACKNOWLEDGE_AND_WAIT'])
+    waiting=next(variant for variant in schema['properties']['interaction']['anyOf'] if variant['properties']['type'].get('enum')==['ACKNOWLEDGE_AND_WAIT'])
     assert waiting['properties']['related_field']=={'type':'null'}
-    assert all(variant['properties']['quick_replies'].get('maxItems') in (0,4) for variant in schema['anyOf'])
+    assert all(variant['properties']['quick_replies'].get('maxItems') in (0,4) for variant in schema['properties']['interaction']['anyOf'])
 
 
 def test_follow_up_generation_references_only_present_case_facts():
